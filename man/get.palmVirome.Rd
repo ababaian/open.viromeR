@@ -4,7 +4,12 @@
 \alias{get.palmVirome}
 \title{A wrapper of several get* functions to create a palm.virome data.frame}
 \usage{
-get.palmVirome(run.vec = NA, org.search = NA, con = SerratusConnect())
+get.palmVirome(
+  run.vec = NA,
+  org.search = NA,
+  con = SerratusConnect(),
+  rm.fp = TRUE
+)
 }
 \arguments{
 \item{run.vec}{character vector, sra run accession list}
@@ -12,6 +17,8 @@ get.palmVirome(run.vec = NA, org.search = NA, con = SerratusConnect())
 \item{org.search}{string, search term to query "scientific_name". Uses SQL "like"}
 
 \item{con}{pq-connection, use SerratusConnect()}
+
+\item{rm.fp}{boolean, remove known  false-positives [TRUE]}
 }
 \value{
 palm.virome  data.frame

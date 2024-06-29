@@ -4,7 +4,8 @@
 #'
 #' @param run.vec    character vector, sra run accession list
 #' @param org.search string, search term to query "scientific_name". Uses SQL "like"
-#' @param con       pq-connection, use SerratusConnect()
+#' @param con        pq-connection, use SerratusConnect()
+#' @param rm.fp      boolean, remove known  false-positives [TRUE]
 #' @return palm.virome  data.frame
 #' @keywords palmid sql sra geo biosample bioproject timeline Serratus Tantalus
 #' @examples
@@ -20,7 +21,8 @@
 #'
 get.palmVirome <- function(run.vec    = NA,
                            org.search = NA,
-                           con = SerratusConnect() ) {
+                           con = SerratusConnect(),
+                           rm.fp = TRUE ) {
   
   if ( !is.na(run.vec)[1] ){
   # Get palmVirome based on sra.vec 
@@ -61,6 +63,21 @@ get.palmVirome <- function(run.vec    = NA,
     virome.df$node_qc         <- as.logical(virome.df$node_qc)
     virome.df$node_seq        <- virome.df$node_seq
     }
+  
+  if ( length( which( is.na(virome.df$tax_family)) ) > 0){
+    virome.df$tax_family <- as.character(virome.df$tax_family)
+    virome.df$tax_family[which( is.na(virome.df$tax_family) )] <- 'unclassified'
+    virome.df$tax_family <- as.factor(virome.df$tax_family)
+  }
+  
+  # Remove False Positive "hits"
+  if (rm.fp){
+    known.fp.fam <- c('Ceratobasidiaceae')
+    known.fp.sotu <- c('u41440', 'u33702', 'u37827', 'u39590')
+    virome.df <- virome.df[ !(virome.df$tax_family %in% known.fp.fam), ]
+    virome.df <- virome.df[ !(virome.df$sotu %in% known.fp.sotu), ]
+    
+  }
   
   # Add time (release date) to virome.df
   # virome.df$date <- get.sraDate(virome.df$run_id, con, TRUE)

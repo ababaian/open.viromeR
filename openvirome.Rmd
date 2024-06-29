@@ -7,23 +7,35 @@ output:
     code_folding: hide
 params:
   palmid.version: '0.0.7'
-  search_type: "SEARCH" # "LIST" or "SEARCH"
-  virome_search_term: 'Eimeria%'
-  input.path: inst/extdata/microsporidia
+  search_type: "SEARCH"            # "LIST" or "STAT" or "SEARCH"
+  virome_search_term: '%Saccharomyces%'  # Scientific_name search term
+  virome_deplete_term: 'Candidatus' # Deplete this term from matches, or '' for none
+  input.path: inst/extdata/candida # <prefix>.stat OR <prefix>.list
+  control_type: 'BIOPROJECT'       # '' (N/A), 'SEARCH', 'LIST', or 'BIOPROJECT'
+  control_search_term: ''          # Set '' to exclude control search
+  control.path: inst/extdata/yeast
   prod.run: no
 editor_options:
   markdown:
-    wrap: 72
+  wrap: 72
 ---
-
 #  {.tabset}
+
+```{r}
+# Open Virome TODO:
+#
+# - [ ] Include reporting of "negative datasets" in total search counts
+# - [ ] Report virus as the "rates of occurrence" within search queries
+# - [ ] Include capacity to define "Negative control" search queries or lists to look for "enrichment"
+#
+```
 
 ## Overview {.tabset}
 
 ```{r setup, include=FALSE}
 # RMarkdown Setting Initialization
 # Command Line Interface ----
-knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+#knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 ```
 
 ```{css, echo=FALSE}
@@ -40,7 +52,7 @@ production.version = params$prod.run
 if (production.version) {
   # Load stable palmid package
   library('palmid', quietly = T)
-  data("palmdb") 
+  data("palmdb")
 
   # Disable warnings
    defaultW <- getOption("warn")
@@ -63,19 +75,21 @@ if (production.version) {
 # Establish Serratus server connection
 con <- SerratusConnect()
 
-
 # Input files
 # Generated within `palmid` container
 # input.path parameter is defined in YAML header
 # which is exposed to CLI
-input.path <- params$input.path
+input.path   <- params$input.path
+control.path <- params$input.path
 
 if (is.null(input.path)) {
   stop("Error: No input provided.")
 }
 
-  input.list      <- paste0(input.path, '.list')    # list of yeast runs
-  input.virome    <- paste0(input.path, '.virome')  # palm_virome query
+  input.list      <- paste0(input.path, '.list')    # Virome search list file
+  control.list    <- paste0(control.path, '.list')  # Control search list file
+  input.virome    <- paste0(input.path, '.virome')  # preamde palm_virome query csv
+  input.stat      <- paste0(input.path, '.stat' )   # STAT-based query
 
 # Output HTML Report
 output.html   <- paste0(input.path, '.html')
@@ -84,15 +98,34 @@ output.html   <- paste0(input.path, '.html')
 # Search Term of SRA "Scientific Name" field,
 # uses SQL "like" operator, which allows for regex
 # expression i.e. 'Saccharomyces%'
-virome_search_term <- params$virome_search_term
+virome_search_term  <- params$virome_search_term
+virome_deplete_term <- params$virome_deplete_term
 
+# Control Set
+control_type  <- params$control_type
+control_search_term <- params$control_search_term
+
+# Exclude control logical variable
+if (control_type == '' ){
+  doControl = FALSE
+} else {
+  doControl = TRUE
+}
+
+
+# LOOK AND FEEL -----------------------
+
+# Control / Test set colors
+ui.setcol <- c('gray50', 'cornflowerblue')
 ```
 
 ```{r initialize message}
 # Print out version
 cat( paste0("palmID Version: ", params$palmid.version) )
 cat( paste0("-- Search Type: ", params$search_type) )
-cat( paste0("-- Taxa search term: ", params$virome_search_term))
+cat( paste0("-- Taxa search term: ", virome_search_term))
+if (doControl){   cat( paste0("-- Control search term: ", control_search_term )) }
+
 ```
 
 ```{r, echo = FALSE}
@@ -100,17 +133,87 @@ cat( paste0("-- Taxa search term: ", params$virome_search_term))
 
 if (params$search_type == "LIST"){
   # Retrieve Virome using a SRA Run vector
-  virome.runs <- read.csv(input.list)[,1]
-  virome.df <- get.palmVirome(run.vec = virome.runs)
-} else {
+  virome.runs  <- read.csv(input.list)[,1]
+  #virome.runs <- XXXXXX # Manual Override
+  virome.df    <- get.palmVirome(run.vec = virome.runs)
+} else if (params$search_type == "SEARCH"){
   # Retrieve virome using search term
-  virome.df <- get.palmVirome(org.search = virome_search_term)
+  virome.df    <- get.palmVirome(org.search = virome_search_term)
+  
+  # Deplete terms (if available)
+  deplete.runs <- grep( virome_deplete_term, virome.df$scientific_name, ignore.case = T)
+  if (length(deplete.runs > 0)){
+    virome.df    <- virome.df[ -deplete.runs, ]
+  } else {
+    # No runs to deplete
+  }
+  
+  virome.runs  <- virome.df$run
+  
+} else if (params$search_type == "STAT"){
+  # Retrieve Virome using a SRA-STAT table
+  virome.stat  <- read.csv(input.stat, header = T)
+  virome.stat  <- virome.stat[ virome.stat$total_count > 10000, ]
+  virome.runs  <- virome.stat$acc
+  
+  virome.df    <- get.palmVirome(run.vec = virome.runs)
+  virome.df    <- merge(virome.df, virome.stat, by.x = 'run', by.y = 'acc')
+} else {
+  stop('Unknown Open Virome Run mode. Use: "LIST" or "SEARCH" or "STAT"')
 }
 
 # Melt virome, grouping by "sOTU"
   virx.df   <- melt.virome( virome.df )
+  
+# Import "Control" Virome
+if (control_type == "LIST"){
+  # Retrieve Virome using a SRA Run vector
+  negVirome.df <- get.negativeVirome(run.vec = virome.runs )
+} else if (control_type == "SEARCH"){
+  # Retrieve virome using search term
+  negVirome.df <- get.negativeVirome(org.search = virome_search_term)
+  
+  #} else if (control_type == "STAT"){
+  # Retrieve Virome using a SRA-STAT table (Not implemented)
 
+} else if (control_type == "BIOPROJECT"){
+  neg.virome.runs <- get.sraProj( run_ids <- virome.df$run,
+                                  exclude.input.runs = TRUE,
+                                  con = con)
+  # If no negative virome samples found, negVirome is NA
+  if (length(neg.virome.runs$run_id) == 0){
+    negVirome.df <- NA
+    doControl <- FALSE
+  } else {
+    negVirome.df <- get.negativeVirome(run.vec = neg.virome.runs$run_id)
+    # Melt virome, grouping by "sOTU"  
+    negv.df   <- melt.virome( negVirome.df )  
+  }
+} else {
+  stop('Unknown Open Virome Run mode. Use: "LIST" or "SEARCH" or "BIOPROJECT"')
+}
+  
 
+  
+# # Import Control data
+# if (doControl){  
+#   if (params$search_type == "LIST"){
+#     # Retrieve Control using a SRA Run vector
+#     control.runs  <- read.csv(input.list)[,1]
+#     control.df    <- get.palmVirome(run.vec = control.runs)
+#     negControl.df <- get.negativeVirome(run.vec = control.runs )
+#   } else {
+#     # Retrieve control using search term
+#     control.df    <- get.palmVirome(org.search = control_search_term)
+#     negControl.df <- get.negativeVirome(org.search = control_search_term)
+#   }
+#   # Melt virome, grouping by "sOTU"
+#    ctrl.df   <- melt.virome( control.df )
+# }
+
+# View(virx.df[ (virx.df$n > 5), ])
+# View(virome.df[ virome.df$sotu == 'u196227', ])  
+  
 ```
 
 #### Download Virome Data Tables {#download-data}
@@ -149,7 +252,7 @@ library(ggplot2)
 # Scientific Name - Virus Taxonomy count frame
 # with ordered factors for plotting
 
-makeTop10 <- function( invec ){
+makeTop10 <- function( invec , top.n = 10){
   # For an input character vector invec
   # returns invec as a  factor
   # of only top 10 entries
@@ -161,7 +264,7 @@ makeTop10 <- function( invec ){
   # Count entries, return top-10
   t10.entries <- table( invec )
   t10.entries <- t10.entries[ rev( order(t10.entries) ) ]
-  t10.entries <- rownames(t10.entries)[1:10]
+  t10.entries <- rownames(t10.entries)[1:top.n]
   
   # Refactor input vector to only top-10 entries
   # and levels ordered by top-10 order
@@ -173,7 +276,6 @@ makeTop10 <- function( invec ){
   return(invec2)
 
 }
-
 # # Select top 10 terms in Scientific Name and Virus Family
 # # for plot, create ordered vector by count
 # t10.org <- virome.df %>%
@@ -188,26 +290,38 @@ makeTop10 <- function( invec ){
 
 # Summarize (count) for plotting
 # organism and virus family
-virome.df2 <- virome.df
+```
+
+```{r, echo = FALSE}
+# Create modified Virome data.frame
+
+if (doControl){
+  virome.df2 <- bind_rows( virome.df, negVirome.df)
+} else {
+  virome.df2 <- virome.df
+}
   # scientific name, simplify to top 10
   virome.df2$scientific_name <- makeTop10(virome.df2$scientific_name)
   # virus family taxonomy, simplify to top 10
   virome.df2$tax_family      <- makeTop10(virome.df2$tax_family)
   
 # Create virome organism summary data.frame
-vorgx.df <- virome.df2 %>% count(scientific_name, tax_family, sort = TRUE)
+vorgx.df <- virome.df2 %>% dplyr::count(scientific_name, tax_family, node_qc, sort = TRUE)
+  vorgx.df$node_qc[ is.na(vorgx.df$node_qc) ] <- FALSE
   vorgx.df$scientific_name <- factor(vorgx.df$scientific_name,
                                      levels = rev( levels(virome.df2$scientific_name)))
+  colnames(vorgx.df) <- c('scientific_name', 'tax_family', 'vRNA', 'n')
   vorgx.df$tax_family      <- factor(vorgx.df$tax_family,
                                      levels = levels(virome.df2$tax_family ))
 
 # Virome bar organism bar plot
 virome.org <- ggplot(vorgx.df, aes( scientific_name, n,
-                                    fill = tax_family)) +
+                                    fill = vRNA)) +
   geom_bar( stat = 'identity') +
   coord_flip() +  theme_bw() +
   xlab("Scientific Name (metadata)") +
-  ylab("Count SRA libraries")
+  ylab("Count SRA Runs") + facet_wrap(~vRNA) +
+  scale_fill_manual( values = ui.setcol)
 
 ```
 
@@ -216,9 +330,329 @@ virome.org <- ggplot(vorgx.df, aes( scientific_name, n,
 plotly::hide_colorbar( virome.org )
 ```
 
+
 ```{r, echo = FALSE}
+# Retrieve SRA Meta-data for virome data.frame
+sra.df <- get.sraMeta( virome.df2$run, con = con, ordinal = TRUE)
+
+# SRA Meta-data aggregation
+sra.df$vRNA <- "Control"
+sra.df$vRNA[ (sra.df$run_id %in% virome.df$run) ] <- "Target"
+
+# # Run Data-type -- R VERSION
+# sra.data <- sra.df %>%
+#             count(vRNA, library_strategy)
+# sra.data.nt <- aggregate(bases ~ vRNA + library_strategy, sra.df, sum)
+# 
+# sra.data    <- sra.data[ order(sra.data$vRNA,       sra.data$library_strategy), ]
+# sra.data.nt <- sra.data.nt[ order(sra.data.nt$vRNA, sra.data.nt$library_strategy), ]
+# 
+# sra.data$Gbp <- (sra.data.nt$bases) / 1e9
+# 
+# sra.dataType <- ggplot(sra.data, aes( x = library_strategy, n,
+#                                       fill = Gbp)) +
+#   geom_bar( stat = 'identity') +
+#   scale_fill_viridis_b() +
+#   geom_col() +
+#   geom_text(aes(label = paste0(n, " runs")), vjust = 1.5, colour = "black") +
+#   scale_y_log10() + coord_polar("x", start = 0) +
+#   theme_bw() + ggtitle("SRA Dataset Types") +
+#   theme(aspect.ratio = 1 ) + 
+#   facet_wrap(~vRNA, ncol = 2)
+# 
+# sra.dataType2 <- ggplot(sra.data, aes( x = library_strategy, Gbp,
+#                                       fill = n )) +
+#   geom_bar( stat = 'identity') +
+#   scale_fill_viridis_b() +
+#   geom_col() +
+#   geom_text(aes(label = paste0(round(Gbp, 1), " Gbp")), vjust = 1.5, colour = "black") +
+#   scale_y_log10() + coord_polar("x", start = 0) +
+#   theme_bw() + ggtitle("SRA Dataset Types") +
+#   theme(aspect.ratio = 1 ) + 
+#   facet_wrap(~vRNA, ncol = 2)
+
+
+# Run Data-type - OV VERSION
+sra.data <- sra.df %>%
+            count(vRNA, library_strategy)
+sra.data.nt <- aggregate(bases ~ vRNA + library_strategy, sra.df, sum)
+
+sra.data    <- sra.data[ order(sra.data$vRNA,       sra.data$library_strategy), ]
+sra.data.nt <- sra.data.nt[ order(sra.data.nt$vRNA, sra.data.nt$library_strategy), ]
+
+sra.data$Gbp <- (sra.data.nt$bases) / 1e9
+
+sra.dataType <- ggplot(sra.data, aes( x = library_strategy, n,
+                                      fill = vRNA)) +
+  geom_bar( stat = 'identity') +
+  scale_fill_manual( values = ui.setcol ) +
+  geom_col() +
+  geom_text(aes(label = paste0(n, " runs")), vjust = 1.5, colour = "black") +
+  scale_y_log10() + coord_polar("x", start = 0) +
+  theme_bw() + ggtitle("Dataset Types -- Count") +
+  theme(aspect.ratio = 1, legend.position = "none") + 
+  facet_wrap(~vRNA, ncol = 2)
+
+sra.dataType2 <- ggplot(sra.data, aes( x = library_strategy, Gbp,
+                                      fill = vRNA )) +
+  geom_bar( stat = 'identity') +
+  scale_fill_manual( values = ui.setcol ) +
+  geom_col() +
+  geom_text(aes(label = paste0(round(Gbp, 1), " Gbp")), vjust = 1.5, colour = "black") +
+  scale_y_log10() + coord_polar("x", start = 0) +
+  theme_bw() + ggtitle("Dataset Types -- Gbp") +
+  theme(aspect.ratio = 1, legend.position = "none") + 
+  facet_wrap(~vRNA, ncol = 2)
+
+```
+
+```{r,  fig.height = 8, fig.width = 10, retina = 3}
+# SRA Datasets Type
+sra.dataType
+sra.dataType2
+```
+
+
+```{r, echo = FALSE}
+# BioProject Sizes
+bp.target.n <- sra.df %>%
+               count(vRNA, bioproject, sort = TRUE) %>%
+               filter( vRNA == 'Target' )
+
+bp.total.n <- sra.df %>%
+               count(bioproject, sort = TRUE)
+
+bp.df      <- merge(bp.total.n, bp.target.n[ , c('bioproject', 'n')], all.x = TRUE, by = 'bioproject')
+  colnames(bp.df) <- c('bioproject', 'bp_n', 'target_n')
+  bp.df$target_n[ is.na(bp.df$target_n) ] <- 0
+  bp.df$perc_target <- 100* bp.df$target_n / bp.df$bp_n
+
+bp.Size <- ggplot(bp.df, aes( x = bp_n, perc_target, bp = bioproject, color = perc_target)) +
+  geom_jitter(width = 0, height = 2,
+              alpha = 0.5) +
+  theme_bw() + scale_x_log10() +
+   scale_colour_continuous(type = "gradient") +
+  ggtitle("Runs per BioProject vs. Percent BioProject-Runs in Target Set (%)") +
+  xlab('BioProject Size (n runs)') + ylab('Percent BioProject in Test Set') +
+  theme(aspect.ratio = 1, legend.position = "none")
+
+bp.hist <- ggplot(bp.df, aes( x = bp_n )) +
+  geom_histogram( n = 60 ) +
+  theme_bw() + scale_x_log10() +
+  ggtitle("BioProject size") +
+  xlab('(n runs)') + ylab('count') +
+  theme(aspect.ratio = 0.6, legend.position = "none")
+
+
+bp.hist2 <- ggplot(bp.df, aes(perc_target)) +
+  geom_histogram( n = 25 , fill = hcl.colors(30, "Blues2", rev = T)) +
+  theme_bw() +
+  ggtitle("% of BioProject in Target") +
+  xlab('Target (%)') + ylab('count') +
+  theme(aspect.ratio = 0.6, legend.position = "none")
+bp.hist
+
+```
+
+```{r,  fig.height = 8, fig.width = 10, retina = 3}
+# SRA Datasets Type
+plotly::hide_legend( bp.Size )
+bp.hist
+bp.hist2
+```
+
+#### Virus Family Summary Statistics
+
+```{r, echo = FALSE}
+# Create virome family - Run summary (top 20)
+virFam.nrun <- virome.df[,  c('tax_family', 'run')]
+virFam.nrun$tax_family <- makeTop10(virFam.nrun$tax_family, top.n = 20)
+virFam.nrun <- unique(virFam.nrun[,  c('tax_family', 'run')]) %>% count(tax_family)
+virFam.nrun$set <- 'n_runs'
+
+# Create virome family - sOTU summary (top 20)
+virFam.sotu <- virome.df[,  c('tax_family', 'sotu')]
+virFam.sotu$tax_family <- makeTop10(virFam.sotu$tax_family, top.n = 20)
+virFam.sotu <- unique(virFam.sotu[,  c('tax_family', 'sotu')]) %>% count(tax_family)
+virFam.sotu$set <- 'n_sotu'
+
+virFam.df <- rbind(virFam.nrun, virFam.sotu)
+
+# Virome Family count bar plot
+virFam.n <- ggplot(virFam.df, aes( tax_family, n)) +
+  geom_bar( stat = 'identity') +
+  coord_flip() +  theme_bw() +
+  xlab("Taxonomic Family") +
+  ylab("Count") + facet_wrap(~set)
+  scale_fill_manual( values = c('gray50', 'cornflowerblue'))
+
+virFam.n
+```
+```{r, echo = FALSE}
+# Scatter plot of Virus Family in `n_runs` vs. `n_sotu`
+virFam.nrun <- unique(virome.df[,  c('tax_family', 'run')]) %>% count(tax_family)
+  colnames(virFam.nrun) <- c("tax_family", "n_run")
+virFam.sotu <- unique(virome.df[,  c('tax_family', 'sotu')]) %>% count(tax_family)
+  colnames(virFam.sotu) <- c("tax_family", "n_sotu")
+
+virFam.df2 <- merge( virFam.nrun, virFam.sotu, by = "tax_family")
+
+# Virome Family count Scatter plot
+virFam.n <- ggplot(virFam.df2, aes( n_run, n_sotu, color = tax_family)) +
+  geom_point() +
+  theme_bw() +
+  theme(aspect.ratio = 1, legend.position = "none") +
+  xlab("Count (Runs)") + ylab("Count (sOTU)")
+
+```
+
+```{r,  fig.height = 8, fig.width = 10, retina = 3}
+# SRA Datasets Type
+plotly::hide_legend( virFam.n )
+```
+
+
+```{r, echo = FALSE}
+# Create a data.frame to plot a heatmap of Virus Family versus BioProject
+# where the heatmap value is the Percent of the BioProject positive for that Virus Family
+
+virFam.df2<- virome.df[,  c('tax_family', 'bio_project')]
+virFam.df2$tax_family <- makeTop10(virFam.df2$tax_family, top.n = 20)
+virFam.df2 <- table(virFam.df2)
+  bpTop   <- colnames(virFam.df2)
+  bpTop.n <- as.numeric(bp.total.n$n[ match(bpTop, bp.total.n$bioproject, nomatch = NA) ])
+  bpTop.n <- bpTop.n[!is.na(bpTop.n)]
+  
+# Divide each matrix-row by vector
+# Form: t( t(M) / vec )
+virFam.df2 <- t( t(virFam.df2) / bpTop.n)
+virFam.df2 <- round( 100 * virFam.df2, 2 )
+virFam.df2 <- as.matrix(virFam.df2)
+  
+# Virome Family count bar plot
+virFam.bp <- gplots::heatmap.2(virFam.df2, trace = "none", 
+                               breaks = c(0,1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
+                               density.info="none",
+                               col = c("black", viridis(10, option = "A")),
+                               key.title = "",
+                               key.xlab = "Percent BioProject in Target",
+                               margins = c(10,10), sepcolor=NULL)
+
+```
+
+
+```{r, echo = FALSE}
+library(vegan)
+library(igraph)
+library(RCy3)
+
+# Virome diversity per species
+# measurement of alpha and beta diversity of two things
+# diversity of 
+# vcounts.df <- table( virome.df$scientific_name, virome.df$sotu )
+
+# Create virome family heatmap (top 20 Taxa)
+#vir.graph <- graph.virome(virome.df, nodes = "run", edges = "sotu",
+#                          node.col = "bio_project", edge.col = "sotu")
+
+
+# Create virome family heatmap (top 20 Taxa)
+vir.graph2 <- graph.virome2(virome.df)
+
+```
+
+```{r}
+# # Paint virGraph (populate with metadata)
+# sotu.df <- distinct( virome.df[ , c('sotu', 'nickname', 'gb_pid', 'gb_acc', 'tax_species', 'tax_family')])
+# 
+# # Get SRA-wide counts for each sotu
+# sotu.gcount <-     tbl(con, "palm_virome_count") %>%
+#     dplyr::filter( sotu %in% sotu.df$sotu ) %>%
+#     select(sotu, runs) %>%  
+#     as.data.frame()
+# # Get virome-wide counts for each sotu
+#   sotu.vcount <- data.frame( table(virome.df$sotu) )
+# 
+# # Merge, and calculate "vrich"  
+# # Percent sOTU in Virome vs SRA wide
+# sotu.df <- merge( sotu.df, sotu.gcount, by = 'sotu')
+# sotu.df <- merge( sotu.df, sotu.vcount, by.x = 'sotu', by.y = 'Var1')
+# sotu.df$vrich <- round( 100 * sotu.df$Freq / sotu.df$runs, 2)
+# # set unmapped to 0
+# sotu.df$gb_pid[ sotu.df$gb_pid == -1 ] <- 0
+# 
+# # Populate virGraph
+# edge.match <- match( E(vir.graph)$ecol ,  sotu.df$sotu )
+#   E(vir.graph)$nickname    <- sotu.df$nickname[ edge.match ]
+#   E(vir.graph)$tax_species <- sotu.df$tax_species[ edge.match ]
+#   E(vir.graph)$tax_family  <- sotu.df$tax_family[ edge.match ]
+#   E(vir.graph)$gb_pid       <- sotu.df$gb_pid[ edge.match ]
+#   E(vir.graph)$gb_acc      <- sotu.df$gb_acc[ edge.match ]
+#   E(vir.graph)$vrich       <- sotu.df$vrich[ edge.match ]
+
+```
+
+
+```{r}
+
+# plot.igraph(vir.graph, layout = layout_with_kk,
+#             vertex.size = 10,
+#             vertex.color = V(vir.graph)$vcol,
+#             edge.width = E(vir.graph)$Weights,
+#             arrow.mode = E(vir.graph)$arrow.mode)
+
+#tkplot(     vir.graph, layout = layout_with_kk,
+#            vertex.size = 10,
+#            vertex.color = V(vir.graph)$vcol,
+#            edge.width = E(vir.graph)$Weights,
+#            arrow.mode = E(vir.graph)$arrow.mode)
+
+# Export to CytoScape (must be open)
+createNetworkFromIgraph(vir.graph2,"virGraph2")
+
+
+
+```
+
+```{r}
+# Create a data.frame to plot a heatmap of Virus Family Expression
+# where the heatmap value is the Number of BioProject runs positive for that Virus
+
+# Create virome family heatmap (top 20 Taxa)
+virFam.df <- virome.df[,  c('tax_family', 'bio_project')]
+virFam.df$tax_family <- makeTop10(virFam.df$tax_family, top.n = 20)
+virFam.df <- table(virFam.df)
+  bpTop   <- colnames(virFam.df)
+  bpTop.n <- bp.total.n$n[ match(bpTop, bp.total.n$bioproject) ]
+
+# Divide each matrix-row by vector
+# Form: t( t(M) / vec )
+virFam.df2 <- t( t(virFam.df) / bpTop.n)
+virFam.df2 <- round( 100 * virFam.df2, 2 )
+virFam.df2 <- as.matrix(virFam.df2)
+  
+# Virome Family count bar plot
+virFam.bp <- gplots::heatmap.2(virFam.df2, trace = "none", 
+                               breaks = c(0,1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
+                               density.info="none",
+                               col = c("black", viridis(10, option = "A")),
+                               key.title = "",
+                               key.xlab = "Percent BioProject in Target",
+                               margins = c(10,10), sepcolor=NULL)
+```
+
+```{r, echo = FALSE}
+# Create virome organism summary data.frame
+vorgx.df2 <- virome.df2[ virome.df2$node_qc, ] %>%
+              count(scientific_name, tax_family, sort = TRUE)
+  vorgx.df2$scientific_name <- factor(vorgx.df2$scientific_name,
+                                     levels = rev( levels(virome.df2$scientific_name)))
+  vorgx.df2$tax_family      <- factor(vorgx.df2$tax_family,
+                                     levels = levels(virome.df2$tax_family ))
+  vorgx.df2 <- vorgx.df2[ !is.na(vorgx.df2$scientific_name), ]
+
 # Virome Tax Distribution
-virome2.org <- ggplot(vorgx.df, aes( x = tax_family, n,
+virome2.org <- ggplot(vorgx.df2, aes( x = tax_family, n,
                                     fill = tax_family)) +
   geom_bar( stat = 'identity') +
   scale_y_log10() + coord_polar("x", start = 0) +
@@ -274,11 +708,38 @@ virus.exp <- ggplot() +
   xlab("sOTU frequency in SRA Runs") +
   ylab("sOTU mean contig coverage")
 
+library("viridis")
+virx.df$plot_name <- makeTop10(virx.df$tax_family)
+
+# Virus Abundance and Expression
+virus.exp2 <- ggplot() + 
+  geom_point( data = virx.df, aes(x = n, y = gb_pid,
+                                  size = log(mean_coverage + 1),
+                                  pp    = sotu,
+                                  covrg = mean_coverage,
+                                  gbacc = gb_acc,
+                                  gbid  = gb_pid,
+                                  tax   = tax_species,
+                                  fam   = tax_family,
+                                  color = log(mean_coverage + 1)),
+              show.legend = FALSE,
+              alpha = 0.5) +
+  geom_hline( yintercept = 90, color = "gray70", linetype = "dashed" ) + 
+  #geom_rug(outside = FALSE) +
+  theme_bw() +
+  scale_color_viridis(option = "plasma") +
+  scale_x_log10() + scale_y_log10() + scale_size_identity() +
+  xlab("sOTU frequency in SRA Runs") +
+  ylab("sOTU mean contig coverage") +
+  facet_wrap(~plot_name, ncol = 4)
+
+#virus.exp2
+
 ```
 
 ```{r}
 # Virus Expression and SRA-Frequency
-plotly::hide_legend( virus.exp )
+plotly::hide_legend( virus.exp2 )
 ```
 
 ```{r, echo = FALSE}
@@ -351,7 +812,6 @@ cbind( as.character(virome.df$scientific_name),
                    order = list(list(6, 'desc')))
   )
 
-
 ```
 
 - `summary_virome.csv`
@@ -380,15 +840,55 @@ cbind( as.character(virx.df$sotu),
 ```
 
 
-
-
-
-
-
-
-
-
-
+<!-- # Bespoke Analysis ------------------------------------------------------------- -->
+<!-- ```{r} -->
+<!-- virome.stat <- virome.stat[ order(virome.stat$total_count), ] -->
+<!-- virome.stat$logCount <- log10(virome.stat$total_count) -->
+<!-- # STAT Read Plot -->
+<!-- statReads <- ggplot( virome.stat, aes(logCount) ) + -->
+<!--   geom_histogram(bins = 50) + xlab('log10 (STAT Read Count)') + ylab('N SRA Runs') -->
+<!-- statReads -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- # Candida-Astrovirus analysis -->
+<!-- meta.df <- read.csv('ov/candida/PRJNA827179.normalized.csv', header = T) -->
+<!-- meta.df$Condition = factor(meta.df$Condition) -->
+<!-- meta.df$Condition  <- factor( meta.df$Condition, -->
+<!--                               levels =  c( "WT", "UME6Off", "UME6On", -->
+<!--                                            "Ume6OfftoOn_0hr",  "Ume6OfftoOn_3hr", "Ume6OfftoOn_6hr", "Ume6OfftoOn_12hr", -->
+<!--                                            "Ume6OntoOff_0hr", "Ume6OntoOff_3hr", "Ume6OntoOff_6hr",   "Ume6OntoOff_12hr" )) -->
+<!-- astro.df <- virome.df[ (virome.df$tax_family  == 'Astroviridae'), ] -->
+<!-- astro.df <- astro.df[ !is.na(astro.df$run), ] -->
+<!-- meta.df <- merge(meta.df, astro.df, by.x = 'biosample_id', by.y = 'bio_sample', all.x = TRUE) -->
+<!-- #astro.df <- astro.df[ !is.na(astro.df$run), ] -->
+<!-- # astroPlot <- ggplot( astro.df[ astro.df$bio_project == 'PRJNA827179', ], -->
+<!-- #                      aes(total_count, node_coverage) ) + -->
+<!-- #   geom_point() + theme_bw() -->
+<!-- # astroPlot -->
+<!-- astroPlot <- ggplot( meta.df, aes(c_RPM, v_RPM) ) + -->
+<!--   geom_point() + theme_bw() + -->
+<!--    xlab('Candida_ReadsPerMillion') + -->
+<!--    ylab('Astrovirus_ReadsPerMillion') -->
+<!-- astroPlot -->
+<!-- cor(meta.df$v_RPM, meta.df$c_RPM) -->
+<!-- astroBar <- ggplot( meta.df, -->
+<!--                     aes(Condition, v_RPM, fill = Condition) ) + -->
+<!--   geom_boxplot() + geom_jitter() + theme_bw() + -->
+<!--    ylab('Astrovirus_ReadsPerMillion') -->
+<!-- astroBar -->
+<!-- astroBar2 <- ggplot( meta.df, -->
+<!--                     aes(Condition, c_RPM, fill = Condition) ) + -->
+<!--   geom_boxplot() + geom_jitter() + theme_bw() + -->
+<!--   ylab('Candida_ReadsPerMillion') -->
+<!-- astroBar2 -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- rpmPlot <- ggplot( virome.df, aes(node_coverage, total_count, -->
+<!--                                   color = tax_family) ) + -->
+<!--   geom_point() + scale_x_log10() + scale_y_log10() + -->
+<!--   facet_wrap(~tax_family) + theme_bw() + theme(legend.position = "none") -->
+<!-- rpmPlot -->
+<!-- ``` -->
 
 
 

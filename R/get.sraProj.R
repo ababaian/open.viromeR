@@ -6,7 +6,7 @@
 #' 
 #' @param run_ids character, SRA 'run_id'
 #' @param con     pq-connection, use SerratusConnect()
-#' @param ordinal boolean, return 'run_ids' ordered vector [FALSE]
+#' @param exclude.input.runs boolean, exclude runs input 'run_ids'
 #' @return data.frame, run_id, biosample character vectors
 #' @keywords palmid Serratus BioProject SRA
 #' @examples
@@ -18,10 +18,11 @@
 #' @import RPostgreSQL
 #' @import dplyr ggplot2
 #' @export
-get.sraBio <- function(run_ids, con, ordinal = FALSE) {
+get.sraProj <- function(run_ids, con, exclude.input.runs = FALSE) {
   # Bind Local Variables
   run <- bio_sample <- biosample_id <-bioproject <- NULL
-
+  
+  # Forward Search to retrieve BioProjects
   # get biosample field for run_id
   sra.bio <- tbl(con, "srarun") %>%
     dplyr::filter(run %in% run_ids) %>%
@@ -30,16 +31,22 @@ get.sraBio <- function(run_ids, con, ordinal = FALSE) {
     colnames(sra.bio) <- c("run_id", "biosample_id", "bioproject")
     # must be unique
     sra.bio <- sra.bio[ !duplicated(sra.bio$run_id), ]
-
-  if (ordinal){
-    # Left join on palm_ids to make a unique vector
-    ord.bio <- data.frame( run_id = run_ids )
-    ord.bio <- merge(ord.bio, sra.bio, all.x = TRUE)
-    ord.bio <- ord.bio[ match(run_ids, ord.bio$run_id), ]
-
-    return(ord.bio$biosample_id)
-  } else {
-    unq.bio <- unique(sra.bio$biosample_id)
-    return(unq.bio)
+    bp_ids  <- sra.bio$bioproject [ !duplicated(sra.bio$bioproject) ]
+    
+  # Reverse Search to retrieve all runs in BioProject
+  sra.bio2 <- tbl(con, "srarun") %>%
+      dplyr::filter(bio_project %in% bp_ids) %>%
+      select(run, bio_sample, bio_project) %>%
+      as.data.frame()
+    colnames(sra.bio2) <- c("run_id", "biosample_id", "bioproject")
+    # must be unique
+    sra.bio2 <- sra.bio2[ !duplicated(sra.bio2$run_id), ]
+    
+  # Deplete runs in the input set of 'run_ids'
+  if (exclude.input.runs) {
+    sra.bio2 <- sra.bio2[ !(sra.bio2$run_id %in% sra.bio$run_id), ]
   }
+    
+    return(sra.bio2)
+  # 
 }
