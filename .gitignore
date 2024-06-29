@@ -12,3 +12,5 @@ palmid-lambda
 local/*
 tmp/*
 var/*
+ov/*
+analysis_scratch.Rmd
