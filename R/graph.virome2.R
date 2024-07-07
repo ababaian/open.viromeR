@@ -8,7 +8,7 @@
 #' @param edge.threshold numeric, minium number of edges required to report [1]
 #' @param node.col   string, column in virome.df to use for node colors ["bio_project"]
 #' @param edge.col   string, column in virome.df to use for edge colors ["sotu"]
-#' @return graph.virome, an igraph object
+#' @return graph.virome, a bipartite igraph object
 #' @keywords palmid sql sra biosample bioproject Serratus igraph
 #' @examples
 #'
@@ -46,8 +46,8 @@ graph.virome2  <- function(virome.df  = NA,
   node1.match     <- unique( match(virome.df[ , node1 ], attributes(V(g))$names) )
   node2.match     <- unique( match(virome.df[ , node2 ], attributes(V(g))$names) )
   
-  V(g)$layer              <- node2
-  V(g)$layer[node1.match] <- node1
+  V(g)$type               <- FALSE  # Run  nodes
+  V(g)$type[node2.match]  <- TRUE   # sOTU nodes
   
   # Paint sotu nodes
   if (node2 == 'sotu'){
@@ -65,7 +65,7 @@ graph.virome2  <- function(virome.df  = NA,
     # Percent sOTU in Virome vs SRA wide
     sotu.df <- merge( sotu.df, sotu.gcount, by = 'sotu')
     sotu.df <- merge( sotu.df, sotu.vcount, by.x = 'sotu', by.y = 'Var1')
-    sotu.df$vrich <- round( 100 * sotu.df$Freq / sotu.df$runs, 2)
+    sotu.df$vrich <- round( sotu.df$Freq / sotu.df$runs, 2)
     # set unmapped to 0
     sotu.df$gb_pid[ sotu.df$gb_pid == -1 ] <- 0
     
@@ -92,13 +92,22 @@ graph.virome2  <- function(virome.df  = NA,
     V(g)$gb_acc    <-  "NA"
     V(g)$gb_acc[node2.match] <- as.character(sotu.df$gb_acc[ node2.smatch ])
     
-    V(g)$vrich     <-   101
+    V(g)$vrich     <-   -1
     V(g)$vrich[node2.match] <- sotu.df$vrich[ node2.smatch ]
     
   }
   
   # Calculate Components (communities) of the graph
-  V(g)$component <- components(g)$membership
+  comp.g <- components(g)
+    Vc.label <- factor( comp.g$membership ) #original labels
+  
+  # Rename component-labels (membership) based on size
+  # 1 = largest ... n = smallest
+  rank.order <- order(comp.g$csize, decreasing = TRUE)
+    levels(Vc.label) <- order(rank.order)
+  
+  # Assign labels to vertices
+  V(g)$component <- as.character( Vc.label )
   
   return(g)
 }

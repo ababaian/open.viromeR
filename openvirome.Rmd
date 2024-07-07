@@ -8,7 +8,7 @@ output:
 params:
   palmid.version: '0.0.7'
   search_type: "SEARCH"            # "LIST" or "STAT" or "SEARCH"
-  virome_search_term: '%Saccharomyces%'  # Scientific_name search term
+  virome_search_term: '%Candida%'  # Scientific_name search term
   virome_deplete_term: 'Candidatus' # Deplete this term from matches, or '' for none
   input.path: inst/extdata/candida # <prefix>.stat OR <prefix>.list
   control_type: 'BIOPROJECT'       # '' (N/A), 'SEARCH', 'LIST', or 'BIOPROJECT'
@@ -19,18 +19,17 @@ editor_options:
   markdown:
   wrap: 72
 ---
-#  {.tabset}
+# Open Virome Markdown  {.tabset}
 
 ```{r}
 # Open Virome TODO:
-#
-# - [ ] Include reporting of "negative datasets" in total search counts
 # - [ ] Report virus as the "rates of occurrence" within search queries
-# - [ ] Include capacity to define "Negative control" search queries or lists to look for "enrichment"
-#
+# - [ ] Include metrics for Alpha and Beta-Diversity (conceptual development needed)
+# - [ ] Incorporate Page_Rank for sOTU and Runs (seperately) to rank output tables
+# - [ ] Report RdRp-network and explore network enrichment for this
 ```
 
-## Overview {.tabset}
+### Analysis Overview {.tabset}
 
 ```{r setup, include=FALSE}
 # RMarkdown Setting Initialization
@@ -194,7 +193,6 @@ if (control_type == "LIST"){
 }
   
 
-  
 # # Import Control data
 # if (doControl){  
 #   if (params$search_type == "LIST"){
@@ -216,7 +214,7 @@ if (control_type == "LIST"){
   
 ```
 
-#### Download Virome Data Tables {#download-data}
+### Download Virome Data Tables {#download-data}
 
 ```{r, echo = FALSE}
 options(warn = -1)
@@ -243,7 +241,7 @@ virx.df  %>%
 
 ```
 
-#### Virome Summary
+### Virome Run Summary {#run-module}
 
 ```{r, echo = FALSE}
 library(ggplot2)
@@ -461,7 +459,7 @@ bp.hist
 bp.hist2
 ```
 
-#### Virus Family Summary Statistics
+### Virus Family Summary {#family-module}
 
 ```{r, echo = FALSE}
 # Create virome family - Run summary (top 20)
@@ -540,6 +538,7 @@ virFam.bp <- gplots::heatmap.2(virFam.df2, trace = "none",
 
 ```
 
+### Network Analysis {#network-module}
 
 ```{r, echo = FALSE}
 library(vegan)
@@ -595,11 +594,12 @@ vir.graph2 <- graph.virome2(virome.df)
 
 ```{r}
 
-# plot.igraph(vir.graph, layout = layout_with_kk,
-#             vertex.size = 10,
-#             vertex.color = V(vir.graph)$vcol,
-#             edge.width = E(vir.graph)$Weights,
-#             arrow.mode = E(vir.graph)$arrow.mode)
+plot.igraph(vir.graph2,
+            layout = layout_with_kk,
+            vertex.size = 10,
+            vertex.color = V(vir.graph2)$vcol,
+            edge.width = E(vir.graph2)$Weights,
+            arrow.mode = E(vir.graph2)$arrow.mode)
 
 #tkplot(     vir.graph, layout = layout_with_kk,
 #            vertex.size = 10,
@@ -608,38 +608,160 @@ vir.graph2 <- graph.virome2(virome.df)
 #            arrow.mode = E(vir.graph)$arrow.mode)
 
 # Export to CytoScape (must be open)
-createNetworkFromIgraph(vir.graph2,"virGraph2")
+# createNetworkFromIgraph(vir.graph2,"virGraph2")
 
+```
+
+```{r}
+
+# g <- vir.graph2
+component.stats <- function(g){
+  # For each "component" in a graph, calculates
+  # cs : Component stats data.frame
+  cs <- data.frame( component = "nil",
+                    n_sotu = 0,
+                    n_run  = 0,
+                    n_edge = 0,
+                    D_sotu = 0,
+                    D_run  = 0,
+                    Vrich  = 0,
+                    Dia    = 0)
+  
+  # Calculate summary data.frame for vir.graph per component
+  comp.names <- unique(V(g)$component)
+  n.comp <- length( comp.names )
+  L.index <- (V(g)$layer == 'sotu') # TRUE is sOTU nodes
+    
+  for (i in seq(1, n.comp)){
+    # Vertices in subgraph of each component
+    V.index <- (V(g)$component == comp.names[i])
+      I.sotu <- which(V.index & L.index)
+      I.runs <- which(V.index & !L.index)
+    
+    subg <- induced_subgraph(g, V.index)
+      subI.sotu <- (V(subg)$layer == 'sotu')
+      subI.runs <- (V(subg)$layer == 'run')
+    
+    # cs for ith component
+    cs.i <- data.frame( component = comp.names[i],
+                    n_sotu = length(I.sotu),
+                    n_run  = length(I.runs),
+                    n_edge = length(E(subg)$run),
+                    D_sotu = mean( degree(subg)[subI.sotu] ),
+                    D_run  = mean( degree(subg)[subI.runs] ),
+                    Vrich  = sum( V(subg)$vrich[subI.sotu] ),
+                    Dia    = diameter( subg ) )
+    
+    cs <- rbind(cs, cs.i)
+    }
+  
+  cs <- cs[-1,] # Remove null-initialization row
+  cs <- cs[ order( as.numeric( as.character( cs$component ) )), ]
+  cs$component <- factor(cs$component)
+  return(cs)
+}
+
+
+# Calculate stats per component
+cs.df <- component.stats(vir.graph2)
+  cs.df$n_nodes   <- cs.df$n_sotu + cs.df$n_run
+  cs.df$perc_sotu <- 100 *   cs.df$n_sotu / cs.df$n_nodes
+```
+
+```{r}
+netlim <- c(1, max(with(cs.df, c(n_nodes, n_edge)))) # Network size limit (log)
+nodelim <- c(0, max(with(cs.df, c(n_sotu, n_run)))) # Node Range Limits
+dlim    <- range(with(cs.df, c(D_sotu, D_run)))     # Degree Range Limits
+
+# Whole Vertex vs. Edge size
+cs.plot1 <- ggplot(cs.df, aes(n_nodes, n_edge,
+                             label = component,
+                             fill = component)) +
+  geom_abline(slope = 1, intercept = 0, color = 'gray50') +
+  geom_label(colour = "white", fontface = "bold") +
+  theme_bw() + theme(legend.position = "none") +
+  scale_x_log10() + scale_y_log10() +
+  scale_fill_manual(values = turbo(length(cs.df$component)))  +
+  coord_cartesian(xlim = netlim , ylim = netlim ) + 
+  xlab('Number of Nodes') + 
+  ylab('Number of Edges')
+cs.plot1
+
+# Run vs OTU
+cs.plot <- ggplot(cs.df, aes(n_run, n_sotu,
+                             label = component,
+                             size = log10(n_edge),
+                             fill = component)) +
+  geom_abline(slope = 1, intercept = 0, color = 'gray50') +
+  geom_label(colour = "white", fontface = "bold") +
+  theme_bw() + theme(legend.position = "none") +
+  scale_fill_manual(values = turbo(length(cs.df$component))) +
+  coord_cartesian(xlim = nodelim, ylim = nodelim) + 
+  xlab('Number of Runs (nodes)') + 
+  ylab('Number of sOTU (nodes)')
+cs.plot
+
+# Cumulative Virome Enrichment per Component
+cs.plot3 <- ggplot(cs.df, aes(n_sotu, Vrich,
+                             label = component,
+                             size = log10(n_edge),
+                             fill = component)) +
+  geom_abline(slope = 1, intercept = 0, color = 'gray50') +
+  geom_label(colour = "white", fontface = "bold") +
+  theme_bw() + theme(legend.position = "none") +
+  scale_fill_manual(values = turbo(length(cs.df$component))) +
+  coord_cartesian(xlim = nodelim, ylim = nodelim) + 
+  xlab('Number of sOTU (nodes)') + 
+  ylab('Cumulative Virome Enrichment')
+cs.plot3
+
+
+# Degree of Run vs OTU
+cs.plot2 <- ggplot(cs.df, aes(D_sotu, D_run,
+                             label = component,
+                             size = log10(n_edge),
+                             fill = component)) +
+  geom_abline(slope = 1, intercept = 0, color = 'gray50') +
+  geom_label(colour = "white", fontface = "bold") +
+  theme_bw() + theme(legend.position = "none") +
+  scale_fill_manual(values = turbo(length(cs.df$component)))  +
+  coord_cartesian(xlim = dlim, ylim = dlim) + 
+  xlab('Mean Runs per sOTU (Degree)') +
+  ylab('Mean sOTU per Run (Degree)') 
+cs.plot2
 
 
 ```
 
 ```{r}
-# Create a data.frame to plot a heatmap of Virus Family Expression
-# where the heatmap value is the Number of BioProject runs positive for that Virus
-
-# Create virome family heatmap (top 20 Taxa)
-virFam.df <- virome.df[,  c('tax_family', 'bio_project')]
-virFam.df$tax_family <- makeTop10(virFam.df$tax_family, top.n = 20)
-virFam.df <- table(virFam.df)
-  bpTop   <- colnames(virFam.df)
-  bpTop.n <- bp.total.n$n[ match(bpTop, bp.total.n$bioproject) ]
-
-# Divide each matrix-row by vector
-# Form: t( t(M) / vec )
-virFam.df2 <- t( t(virFam.df) / bpTop.n)
-virFam.df2 <- round( 100 * virFam.df2, 2 )
-virFam.df2 <- as.matrix(virFam.df2)
-  
-# Virome Family count bar plot
-virFam.bp <- gplots::heatmap.2(virFam.df2, trace = "none", 
-                               breaks = c(0,1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
-                               density.info="none",
-                               col = c("black", viridis(10, option = "A")),
-                               key.title = "",
-                               key.xlab = "Percent BioProject in Target",
-                               margins = c(10,10), sepcolor=NULL)
+## Not working with >20 bioProjects
+# # Create a data.frame to plot a heatmap of Virus Family Expression
+# # where the heatmap value is the Number of BioProject runs positive for that Virus
+# 
+# # Create virome family heatmap (top 20 Taxa)
+# virFam.df <- virome.df[,  c('tax_family', 'bio_project')]
+# virFam.df$tax_family <- makeTop10(virFam.df$tax_family, top.n = 20)
+# virFam.df <- table(virFam.df)
+#   bpTop   <- colnames(virFam.df)
+#   bpTop.n <- bp.total.n$n[ match(bpTop, bp.total.n$bioproject) ]
+# 
+# # Divide each matrix-row by vector
+# # Form: t( t(M) / vec )
+# virFam.df2 <- t( t(virFam.df) / bpTop.n)
+# virFam.df2 <- round( 100 * virFam.df2, 2 )
+# virFam.df2 <- as.matrix(virFam.df2)
+#   
+# # Virome Family count bar plot
+# virFam.bp <- gplots::heatmap.2(virFam.df2, trace = "none", 
+#                                breaks = c(0,1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
+#                                density.info="none",
+#                                col = c("black", viridis(10, option = "A")),
+#                                key.title = "",
+#                                key.xlab = "Percent BioProject in Target",
+#                                margins = c(10,10), sepcolor=NULL)
 ```
+
+
 
 ```{r, echo = FALSE}
 # Create virome organism summary data.frame
@@ -661,6 +783,9 @@ virome2.org <- ggplot(vorgx.df2, aes( x = tax_family, n,
   facet_wrap(~scientific_name, ncol = 4)
 
 ```
+
+
+### Label Summary {#meta-data-module}
 
 ```{r,  fig.height = 8, fig.width = 10, retina = 3}
 # Per "Species" family-levle virome summary
