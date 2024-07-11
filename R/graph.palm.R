@@ -18,47 +18,45 @@
 #'
 graph.palm     <- function(virome.df = NA,
                            pid.threshold = 30,
+                           expanded.graph = FALSE,
                            con = SerratusConnect()) {
+  # Paint vertices/edges from virome.df
+  sotu.df <- distinct( virome.df[ , c('sotu', 'nickname', 'gb_pid', 'gb_acc', 'tax_species', 'tax_family')])
+  
   # Reduce sOTU list to unique entries
-  # sotu.vec <- unique(virome.df$sotu)
-  sotu.vec <- as.character( unique(virome.df$sotu) )
+  sotu.vec <- as.character( sotu.df$sotu )
   
   # Get palmVirome based on sra.vec
   # add self-identity (100%)
   sotu.edge <- tbl(con, "palm_graph") %>%
     dplyr::filter( palm_id1 %in% sotu.vec ) %>%
     as.data.frame()
+    dbDisconnect( con ) # Close Connection
   
-  # sotu.edge <- rbind(sotu.edge,
-  #                    data.frame(row_index = 1,
-  #                               palm_id1 = sotu.vec,
-  #                               palm_id2 = sotu.vec,
-  #                               pident = 100) )
-  sotu.edge <- sotu.edge[ sotu.edge$palm_id2 %in% sotu.vec,  ]
-  sotu.edge <- sotu.edge[ sotu.edge$pident >= pid.threshold, ]
-  
-  # Paint vertices/edges from virome.df
-  sotu.df <- distinct( virome.df[ , c('sotu', 'nickname', 'gb_pid', 'gb_acc', 'tax_species', 'tax_family')])
-    # Get SRA-wide counts for each sotu
-    sotu.gcount <-     tbl(con, "palm_virome_count") %>%
-      dplyr::filter( sotu %in% sotu.df$sotu ) %>%
-      select(sotu, runs) %>%  
-      as.data.frame()
-    # Get virome-wide counts for each sotu
-    sotu.vcount <- data.frame( table(virome.df$sotu) )
+  if (expanded.graph){
+    # Return all linked sOTU
+    sotu.edge <- sotu.edge[ sotu.edge$pident >= pid.threshold, ]
     
-    # Merge, and calculate "vrich"
-    # Percent sOTU in Virome vs SRA wide
-    sotu.df <- merge( sotu.df, sotu.gcount, by = 'sotu')
-    sotu.df <- merge( sotu.df, sotu.vcount, by.x = 'sotu', by.y = 'Var1')
-    sotu.df$vrich <- round( sotu.df$Freq / sotu.df$runs, 2)
-    sotu.df <- sotu.df[,  c('sotu', 'nickname', 'gb_pid', 'gb_acc', 'tax_species', 'tax_family', 'vrich')]
+    # Create igraph object from Edge List
+    g <- graph_from_data_frame(sotu.edge[, c("palm_id1", "palm_id2")],
+                               directed = FALSE)
+    E(g)$pid <- sotu.edge$pident
+    
+    
+    
+  } else {
+    # Return sOTU in input set only
+    sotu.edge <- sotu.edge[ sotu.edge$palm_id2 %in% sotu.vec,  ]
+    sotu.edge <- sotu.edge[ sotu.edge$pident >= pid.threshold, ]
+    
+    # Create igraph object from Edge List
+    g <- graph_from_data_frame(sotu.edge[, c("palm_id1", "palm_id2")],
+                               directed = FALSE,
+                               vertices = sotu.df)
+    E(g)$pid <- sotu.edge$pident
+  }
   
-  # Create igraph object from Edge List
-  g <- graph_from_data_frame(sotu.edge[, c("palm_id1", "palm_id2")],
-                             directed = FALSE,
-                             vertices = sotu.df)
-  E(g)$pid <- sotu.edge$pident
+
   
   # Calculate Components (communities) of the graph
   comp.g <- components(g)

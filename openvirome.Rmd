@@ -8,12 +8,13 @@ output:
 params:
   palmid.version: '0.0.7'
   search_type: "SEARCH"            # "LIST" or "STAT" or "SEARCH"
-  virome_search_term: '%Candida%'  # Scientific_name search term
+  virome_search_term: '%Eimeria%'  # Scientific_name search term
   virome_deplete_term: 'Candidatus' # Deplete this term from matches, or '' for none
   input.path: inst/extdata/candida # <prefix>.stat OR <prefix>.list
   control_type: 'BIOPROJECT'       # '' (N/A), 'SEARCH', 'LIST', or 'BIOPROJECT'
   control_search_term: ''          # Set '' to exclude control search
   control.path: inst/extdata/yeast
+  export.cytoscape: TRUE
   prod.run: no
 editor_options:
   markdown:
@@ -111,6 +112,8 @@ if (control_type == '' ){
   doControl = TRUE
 }
 
+# Include Cytoscape network plot export
+export.cytoscape <- params$export.cytoscape
 
 # LOOK AND FEEL -----------------------
 
@@ -542,8 +545,10 @@ virFam.bp <- gplots::heatmap.2(virFam.df2, trace = "none",
 
 ```{r, echo = FALSE}
 library(vegan)
+library(viridis)
 library(igraph)
 library(RCy3)
+library(reshape2)
 
 # Virome diversity per species
 # measurement of alpha and beta diversity of two things
@@ -555,51 +560,26 @@ library(RCy3)
 #                          node.col = "bio_project", edge.col = "sotu")
 
 
-# Create virome family heatmap (top 20 Taxa)
+# Create a bipartite (sOTU + Run) graph based on the virome
 vir.graph2 <- graph.virome2(virome.df)
 
 ```
 
 ```{r}
-# # Paint virGraph (populate with metadata)
-# sotu.df <- distinct( virome.df[ , c('sotu', 'nickname', 'gb_pid', 'gb_acc', 'tax_species', 'tax_family')])
-# 
-# # Get SRA-wide counts for each sotu
-# sotu.gcount <-     tbl(con, "palm_virome_count") %>%
-#     dplyr::filter( sotu %in% sotu.df$sotu ) %>%
-#     select(sotu, runs) %>%  
-#     as.data.frame()
-# # Get virome-wide counts for each sotu
-#   sotu.vcount <- data.frame( table(virome.df$sotu) )
-# 
-# # Merge, and calculate "vrich"  
-# # Percent sOTU in Virome vs SRA wide
-# sotu.df <- merge( sotu.df, sotu.gcount, by = 'sotu')
-# sotu.df <- merge( sotu.df, sotu.vcount, by.x = 'sotu', by.y = 'Var1')
-# sotu.df$vrich <- round( 100 * sotu.df$Freq / sotu.df$runs, 2)
-# # set unmapped to 0
-# sotu.df$gb_pid[ sotu.df$gb_pid == -1 ] <- 0
-# 
-# # Populate virGraph
-# edge.match <- match( E(vir.graph)$ecol ,  sotu.df$sotu )
-#   E(vir.graph)$nickname    <- sotu.df$nickname[ edge.match ]
-#   E(vir.graph)$tax_species <- sotu.df$tax_species[ edge.match ]
-#   E(vir.graph)$tax_family  <- sotu.df$tax_family[ edge.match ]
-#   E(vir.graph)$gb_pid       <- sotu.df$gb_pid[ edge.match ]
-#   E(vir.graph)$gb_acc      <- sotu.df$gb_acc[ edge.match ]
-#   E(vir.graph)$vrich       <- sotu.df$vrich[ edge.match ]
+# Plot Network (add conditional to avoid plotting large networks)
+# Interactive plot with pull-down of components of the network
 
-```
-
-
-```{r}
-
-plot.igraph(vir.graph2,
-            layout = layout_with_kk,
-            vertex.size = 10,
-            vertex.color = V(vir.graph2)$vcol,
-            edge.width = E(vir.graph2)$Weights,
-            arrow.mode = E(vir.graph2)$arrow.mode)
+if ( length( V(vir.graph2) ) < 1000 & length( E(vir.graph2) ) < 5000 ) {
+  plot.igraph(vir.graph2,
+              layout = layout_nicely,
+              vertex.size = 5,
+              vertex.label = NA,
+              vertex.color = V(vir.graph2)$type,
+              arrow.mode = "-",
+              rescale = TRUE) 
+} else {
+  print("Skipping network plot, >1000 Nodes or >5000 edges")
+}
 
 #tkplot(     vir.graph, layout = layout_with_kk,
 #            vertex.size = 10,
@@ -607,14 +587,15 @@ plot.igraph(vir.graph2,
 #            edge.width = E(vir.graph)$Weights,
 #            arrow.mode = E(vir.graph)$arrow.mode)
 
-# Export to CytoScape (must be open)
-# createNetworkFromIgraph(vir.graph2,"virGraph2")
+if (export.cytoscape == TRUE ){
+  # Export to CytoScape (must be open)
+  createNetworkFromIgraph(vir.graph2,"virGraph2")
+}
 
 ```
 
 ```{r}
-
-# g <- vir.graph2
+# Component-wise statistics for the network
 component.stats <- function(g){
   # For each "component" in a graph, calculates
   # cs : Component stats data.frame
@@ -630,7 +611,7 @@ component.stats <- function(g){
   # Calculate summary data.frame for vir.graph per component
   comp.names <- unique(V(g)$component)
   n.comp <- length( comp.names )
-  L.index <- (V(g)$layer == 'sotu') # TRUE is sOTU nodes
+  L.index <- (V(g)$type == TRUE) # TRUE is sOTU nodes
     
   for (i in seq(1, n.comp)){
     # Vertices in subgraph of each component
@@ -639,8 +620,8 @@ component.stats <- function(g){
       I.runs <- which(V.index & !L.index)
     
     subg <- induced_subgraph(g, V.index)
-      subI.sotu <- (V(subg)$layer == 'sotu')
-      subI.runs <- (V(subg)$layer == 'run')
+      subI.sotu <- (V(subg)$type == TRUE)
+      subI.runs <- (V(subg)$type == FALSE)
     
     # cs for ith component
     cs.i <- data.frame( component = comp.names[i],
@@ -669,12 +650,13 @@ cs.df <- component.stats(vir.graph2)
 ```
 
 ```{r}
+# Plot variables
 netlim <- c(1, max(with(cs.df, c(n_nodes, n_edge)))) # Network size limit (log)
 nodelim <- c(0, max(with(cs.df, c(n_sotu, n_run)))) # Node Range Limits
 dlim    <- range(with(cs.df, c(D_sotu, D_run)))     # Degree Range Limits
 
 # Whole Vertex vs. Edge size
-cs.plot1 <- ggplot(cs.df, aes(n_nodes, n_edge,
+cs.plot0 <- ggplot(cs.df, aes(n_nodes, n_edge,
                              label = component,
                              fill = component)) +
   geom_abline(slope = 1, intercept = 0, color = 'gray50') +
@@ -685,10 +667,10 @@ cs.plot1 <- ggplot(cs.df, aes(n_nodes, n_edge,
   coord_cartesian(xlim = netlim , ylim = netlim ) + 
   xlab('Number of Nodes') + 
   ylab('Number of Edges')
-cs.plot1
+cs.plot0
 
 # Run vs OTU
-cs.plot <- ggplot(cs.df, aes(n_run, n_sotu,
+cs.plot1 <- ggplot(cs.df, aes(n_run, n_sotu,
                              label = component,
                              size = log10(n_edge),
                              fill = component)) +
@@ -699,10 +681,10 @@ cs.plot <- ggplot(cs.df, aes(n_run, n_sotu,
   coord_cartesian(xlim = nodelim, ylim = nodelim) + 
   xlab('Number of Runs (nodes)') + 
   ylab('Number of sOTU (nodes)')
-cs.plot
+cs.plot1
 
 # Cumulative Virome Enrichment per Component
-cs.plot3 <- ggplot(cs.df, aes(n_sotu, Vrich,
+cs.plot2 <- ggplot(cs.df, aes(n_sotu, Vrich,
                              label = component,
                              size = log10(n_edge),
                              fill = component)) +
@@ -713,11 +695,11 @@ cs.plot3 <- ggplot(cs.df, aes(n_sotu, Vrich,
   coord_cartesian(xlim = nodelim, ylim = nodelim) + 
   xlab('Number of sOTU (nodes)') + 
   ylab('Cumulative Virome Enrichment')
-cs.plot3
+cs.plot2
 
 
 # Degree of Run vs OTU
-cs.plot2 <- ggplot(cs.df, aes(D_sotu, D_run,
+cs.plot3 <- ggplot(cs.df, aes(D_sotu, D_run,
                              label = component,
                              size = log10(n_edge),
                              fill = component)) +
@@ -728,8 +710,136 @@ cs.plot2 <- ggplot(cs.df, aes(D_sotu, D_run,
   coord_cartesian(xlim = dlim, ylim = dlim) + 
   xlab('Mean Runs per sOTU (Degree)') +
   ylab('Mean sOTU per Run (Degree)') 
-cs.plot2
+cs.plot3
 
+
+```
+
+```{r}
+# Create summary data.
+i.sotu <- V(vir.graph2)$type
+V.df <- data.frame( sotu   = V(vir.graph2)$name[ i.sotu  ],
+                    vrich  = V(vir.graph2)$vrich[ i.sotu ],
+                    pr     = V(vir.graph2)$pr[ i.sotu    ],
+                    vrank  = V(vir.graph2)$vrank[ i.sotu ],
+                    vexact = V(vir.graph2)$v.exact[ i.sotu ],
+                    nruns  = degree(vir.graph2)[ i.sotu ] )
+                    
+V.df <- V.df[ order(V.df$vrank, decreasing = TRUE), ]
+
+V.plot <- ggplot( V.df, aes(pr, vrich,
+                            fill = vrank,
+                            label = sotu)) +
+  geom_label(colour = "white", fontface = "bold") +
+  #geom_point() +
+  scale_fill_viridis(option = "plasma") +
+  theme_bw() +
+  xlab('Page Rank (sOTU)') +
+  ylab('V-enrichment (sOTU)') 
+V.plot
+ 
+# V2.plot <- ggplot( V.df, aes(nruns, vexact,
+#                              fill  = vrank,
+#                              label = sotu)) +
+#   geom_label(colour = "white", fontface = "bold") +
+#   geom_abline(color = 'red', slope = 0, intercept = -log10(0.001)) +
+#   scale_fill_viridis(option = "plasma") +
+#   theme_bw() 
+# V2.plot
+
+```
+
+```{r}
+# Create Palmprint - palmprint alignment-distance network
+palm.graph <- graph.palm( virome.df )
+  vir2palm <- match(V(palm.graph)$name, V(vir.graph2)$name) # look-up index
+  
+  V(palm.graph)$pr    <- V(vir.graph2)$pr[ vir2palm ]
+  V(palm.graph)$vrich <- V(vir.graph2)$vrich[ vir2palm ]
+  V(palm.graph)$vrank <- V(vir.graph2)$vrank[ vir2palm ]
+  V(palm.graph)$tax_species <- V(vir.graph2)$tax_species[ vir2palm ]
+
+  
+#palm.graph2 <- delete_vertices( palm.graph, V(palm.graph)$name[ (degree(palm.graph) < 2) ])
+createNetworkFromIgraph(palm.graph,"palmGraph")         
+```
+
+```{r}
+  
+# Plot the Degree of interconnectivity for Palmprint network
+palm.degree <- data.frame( set = "observed", setn = '0',
+                           degree = as.numeric(degree(palm.graph)))
+
+# Generate random-sampled Control Sets of Palmprints
+# (sample N palmprints from all palmprints)
+n.controlsets = 10
+
+for (i in 1:n.controlsets){
+  ctrl.g <- graph.palmControl(virome.df)
+  palm.degree <- rbind( palm.degree,
+                        data.frame( set = "expected",
+                                    setn = as.character(i),
+                                    degree = as.numeric(degree(ctrl.g))) )
+}
+
+
+# Rank Observed and Expected (sampled) Palmprint-sets by the max-degrees of a node
+observed.rank <- palm.degree$rank[ palm.degree$set == 'observed'][1] # store observed rank value
+print("The Observed Network contains:  ")
+
+palm.degree.max <- aggregate(palm.degree, by = list(palm.degree$setn), max)
+  palm.degree.max <- palm.degree.max[ , c('setn', 'degree')]
+  palm.degree.max <- palm.degree.max[ order(palm.degree.max$degree, decreasing = TRUE), ]
+  palm.degree.max$rank <- 1:length(palm.degree.max$setn)
+  # assign ranks
+  palm.degree$rank <- palm.degree.max$rank[ match(palm.degree$setn, palm.degree.max$setn) ] 
+  
+  
+```
+
+```{r}
+
+rd.plot <- ggplot( palm.degree, aes(degree,
+                                    alpha = set,
+                                    fill  = setn)) +
+  geom_histogram(binwidth = 1,  position = 'identity', colour = NA) +
+  theme_bw() + xlab('sOTU node degree') +
+  theme(legend.position = "none") +
+  scale_alpha_manual(  values = c(0.05, 0.5) ) +
+  scale_fill_manual( values = c( 'orange2',  rep("black", length(unique(palm.degree$setn)) -1 ))) +
+  facet_wrap(~set, ncol = 1)
+rd.plot
+
+rd.plot <- ggplot( palm.degree, aes(rank, degree,
+                                    color = set,
+                                    fill = setn,
+                                    alpha = set)) +
+  geom_jitter(height = 0.5, width = 0.2) +
+  geom_boxplot(color = "black", outliers =  FALSE) +
+  scale_alpha_manual(values = c(0.4, 0.4)) +
+  scale_color_manual(values = c('gray50', 'orange2')) +
+  scale_fill_manual( values = c( 'orange2',  rep("gray70", length(unique(palm.degree$setn)) -1 ))) +
+  theme_bw() + xlab('Rank set') +
+  theme(legend.position = "none")
+rd.plot
+
+palm.degree.count <- melt(table( palm.degree[ , c("rank", "degree")]))
+  palm.degree.count$set <- "expected"
+  palm.degree.count$set[ palm.degree.count$rank == observed.rank] <- "observed"
+
+rd.plot <- ggplot( palm.degree.count, aes(x = factor(degree),
+                                          y = value,
+                                          color = set)) +
+  geom_boxplot(outliers = FALSE) +
+  geom_jitter(height = 0, alpha = 0.05) +
+  scale_alpha_manual(values = c(0.4, 0.4)) +
+  scale_color_manual(values = c('gray50', 'orange2')) +
+  theme_bw() + xlab('Node Degree') +
+  theme(legend.position = "none") + coord_flip()
+rd.plot
+
+# Control RdRp Network
+# createNetworkFromIgraph(ctrl.g,"rdrp")            
 
 ```
 

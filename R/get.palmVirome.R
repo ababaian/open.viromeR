@@ -94,6 +94,7 @@ get.palmVirome <- function(run.vec    = NA,
   #   virome.df$lat <- virome.geo.tmp$lat
   # }
   
+  DBI::dbDisconnect(con)
   return(virome.df)
 }
 

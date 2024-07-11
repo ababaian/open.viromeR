@@ -4,14 +4,7 @@
 \alias{graph.virome2}
 \title{Convert virome.df into an igraph object - all node}
 \usage{
-graph.virome2(
-  virome.df = NA,
-  node1 = "run",
-  node2 = "sotu",
-  node1.col = "bio_project",
-  node2.col = "tax_family",
-  edge.col = "node_coverage"
-)
+graph.virome2(virome.df = NA, node1 = "run", node2 = "sotu")
 }
 \arguments{
 \item{virome.df}{data.frame, produced by the get.virome() function}
@@ -19,15 +12,9 @@ graph.virome2(
 \item{node1}{string, column in virome.df to use as nodes ["bio_project"]}
 
 \item{node2}{string, column in virome.df to use as edges ["tax_family"]}
-
-\item{edge.col}{string, column in virome.df to use for edge colors ["sotu"]}
-
-\item{edge.threshold}{numeric, minium number of edges required to report [1]}
-
-\item{node.col}{string, column in virome.df to use for node colors ["bio_project"]}
 }
 \value{
-graph.virome, an igraph object
+graph.virome, a bipartite igraph object
 }
 \description{
 Convert virome.df into an igraph object - all node
