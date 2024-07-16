@@ -28,8 +28,8 @@ graph.virome2  <- function(virome.df  = NA,
   g <- graph_from_data_frame(edgeList, directed = FALSE)
   
   # Color Nodes by node.type
-  node1.match     <- unique( match(virome.df[ , node1 ], attributes(V(g))$names) )
-  node2.match     <- unique( match(virome.df[ , node2 ], attributes(V(g))$names) )
+  node1.match     <- unique( match(virome.df[ , node1 ], attributes(V(g))$names) ) # run
+  node2.match     <- unique( match(virome.df[ , node2 ], attributes(V(g))$names) ) # sOTU
   
   # Define Vertex Types to make it bipartite
   V(g)$type               <- FALSE  # Run  nodes
@@ -52,8 +52,9 @@ graph.virome2  <- function(virome.df  = NA,
   # Paint sotu nodes
   if (node2 == 'sotu'){
     
-    # Initialize sOTU data.frame for painting nodes
+    # Initialize sOTU / run data.frame for painting nodes
     sotu.df <- distinct( virome.df[ , c('sotu', 'nickname', 'gb_pid', 'gb_acc', 'tax_species', 'tax_family')])
+    run.df  <- distinct( virome.df[ , c('run', 'scientific_name', 'bio_sample', 'bio_project')])
     
     # VRICH Calculation ---------------------------------
     # Get SRA-wide counts for each sotu
@@ -129,6 +130,15 @@ graph.virome2  <- function(virome.df  = NA,
                                  c( n_out, m_out )) ,
                          alternative = 'greater' )
       
+      # Virome Exact Score
+      v.exact <- -log10( min(1 ,  FT$p.value * n.tests) )
+      
+      
+      # IF Virome Exact is >100 or INF, set to 100
+      if ( v.exact > 100 ){
+        v.exact <- 100
+      }
+      
       # IF odds ratio is "Infinite", set it to 10
       if ( is.infinite(FT$estimate) ){
         FT$estimate <- 10
@@ -136,7 +146,7 @@ graph.virome2  <- function(virome.df  = NA,
     
         # Return p-value, OR, and BJ corrected p-value as -log10
         return( c( FT$p.value,
-                   -log10( min(1 ,  FT$p.value * n.tests) ),
+                   v.exact,
                    FT$estimate)
                 )
     }
@@ -145,7 +155,7 @@ graph.virome2  <- function(virome.df  = NA,
     sotu.exact <- data.frame( t( apply(sotu.df[ ,  c("n_vir", "n_total")], VExact, MARGIN = 1 ) ) )
       colnames(sotu.exact) <- c("p.exact", "v.exact", "v.or")
     
-    # Paint Nodes -----------------------------
+    # Paint Virome Nodes -----------------------------
       
     # set sOTU not mappted to GenBank to 0
     sotu.df$gb_pid[ sotu.df$gb_pid == -1 ] <- 0
@@ -183,10 +193,23 @@ graph.virome2  <- function(virome.df  = NA,
     
   } else {
     # Set blank (-1) Vrich
+    V(g)$p.exact <-  1
     V(g)$vrich   <- -1
     V(g)$v.exact <- -1
     V(g)$v.or    <-  0
   }
+  
+  # Paint Run Nodes -----------------------------
+  node1.smatch <- match( attributes(V(g))$names ,  run.df$run )
+  
+  V(g)$run     <- "NA"
+  V(g)$run[node1.match]        <- as.character( run.df$run[ node1.smatch ])
+  
+  V(g)$scientific_name     <- "NA"
+  V(g)$scientific_name[node1.match]        <- as.character( run.df$scientific_name[ node1.smatch ])
+  
+  V(g)$bioproject     <- "NA"
+  V(g)$bioproject[node1.match]        <- as.character( run.df$bioproject[ node1.smatch ])
   
   # Calculate Components (communities) of the graph
   comp.g <- components(g)
