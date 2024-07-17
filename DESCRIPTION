@@ -37,16 +37,20 @@ Imports:
     gridExtra (>= 2.3),
     htmltools,
     htmlwidgets,
+    igraph,
     leaflet,
     methods,
     plotly,
+    reshape2,
     rmarkdown,
+    RCy3,
     RPostgreSQL,
     scales,
     stats,
     treeio,
     utils,
-    viridisLite
+    viridisLite,
+    vegan
 Depends:
     dplyr,
     ggplot2 (>= 3.3.3)
