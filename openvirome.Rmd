@@ -9,8 +9,8 @@ params:
   ov.version: '0.0.8'
   analysis_name: 'Apicomplexa'
   search_type: "LIST"            # "LIST" or "STAT" or "SEARCH"
-  virome_search_term: '%Eimeria%'  # Scientific_name search term
-  virome_deplete_term: 'NULL' # Deplete this term from matches, or '' for none
+  virome_search_term: '%%'  # Scientific_name search term
+  virome_deplete_term: '' # Deplete this term from matches, or '' for none
   input.path: inst/extdata/apicomplexa # <prefix>.stat OR <prefix>.list
   control_type: 'BIOPROJECT'       # '' (N/A), 'SEARCH', 'LIST', or 'BIOPROJECT'
   control_search_term: ''          # Set '' to exclude control search
@@ -848,7 +848,7 @@ rd.plot <- ggplot( palm.degree.count, aes(x = factor(degree),
   geom_jitter(height = 0, alpha = 0.05) +
   scale_alpha_manual(values = c(0.4, 0.4)) +
   scale_color_manual(values = c('gray50', 'orange2')) +
-  theme_bw() + xlab('Node Degree') + ylab('Node Frequency')
+  theme_bw() + xlab('Node Degree') + ylab('Node Frequency') +
   theme(legend.position = "none") + coord_flip()
 rd.plot
 
