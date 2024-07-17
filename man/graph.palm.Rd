@@ -8,6 +8,7 @@ graph.palm(
   virome.df = NA,
   pid.threshold = 30,
   expanded.graph = FALSE,
+  all.edges = FALSE,
   con = SerratusConnect()
 )
 }

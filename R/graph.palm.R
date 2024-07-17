@@ -19,6 +19,7 @@
 graph.palm     <- function(virome.df = NA,
                            pid.threshold = 30,
                            expanded.graph = FALSE,
+                           all.edges      = FALSE,
                            con = SerratusConnect()) {
   # Paint vertices/edges from virome.df
   sotu.df <- distinct( virome.df[ , c('sotu', 'nickname', 'gb_pid', 'gb_acc', 'tax_species', 'tax_family')])
@@ -42,7 +43,11 @@ graph.palm     <- function(virome.df = NA,
                                directed = FALSE)
     E(g)$pid <- sotu.edge$pident
     
-    
+    if (!all.edges){
+      # Prune edges to those with Degree >= 2
+      # (removes single-link viruses)
+      g <- subgraph( g, vids = which(degree(g) >= 2) )
+    }
     
   } else {
     # Return sOTU in input set only
@@ -55,8 +60,6 @@ graph.palm     <- function(virome.df = NA,
                                vertices = sotu.df)
     E(g)$pid <- sotu.edge$pident
   }
-  
-
   
   # Calculate Components (communities) of the graph
   comp.g <- components(g)

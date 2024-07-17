@@ -2,22 +2,24 @@
 % Please edit documentation in R/graph.virome2.R
 \name{graph.virome2}
 \alias{graph.virome2}
-\title{Convert virome.df into an igraph object - all node}
+\title{Convert virome.df into an Virome igraph object - all nodes}
 \usage{
-graph.virome2(virome.df = NA, node1 = "run", node2 = "sotu")
+graph.virome2(virome.df = NA, con = SerratusConnect())
 }
 \arguments{
 \item{virome.df}{data.frame, produced by the get.virome() function}
 
-\item{node1}{string, column in virome.df to use as nodes ["bio_project"]}
+\item{con}{pq-connection, use SerratusConnect()}
 
-\item{node2}{string, column in virome.df to use as edges ["tax_family"]}
+\item{node1}{string, column in virome.df to use as nodes ["run"]}
+
+\item{node2}{string, column in virome.df to use as edges ["sotu"]}
 }
 \value{
 graph.virome, a bipartite igraph object
 }
 \description{
-Convert virome.df into an igraph object - all node
+Convert virome.df into an Virome igraph object - all nodes
 }
 \examples{
 

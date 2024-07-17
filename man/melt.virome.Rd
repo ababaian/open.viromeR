@@ -4,7 +4,7 @@
 \alias{melt.virome}
 \title{Melt the virome.df object into a summarized form around sOTU}
 \usage{
-\method{melt}{virome}(virome.df)
+melt.virome(virome.df)
 }
 \arguments{
 \item{virome.df}{data.frame, created by get.palmVirome()}
