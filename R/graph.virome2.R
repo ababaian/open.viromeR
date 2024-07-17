@@ -71,17 +71,17 @@ graph.virome2  <- function(virome.df  = NA,
   # Paint Run Nodes =================================================
   run.df  <- distinct( virome.df[ , c('run', 'scientific_name', 'bio_sample', 'bio_project')])
   
-  node1.smatch <- match( attributes(V(g))$names,  run.df$run )
-    node1.smatch <- node1.smatch[ !is.na(node1.smatch)] 
+  node1.rmatch <- match( attributes(V(g))$names,  run.df$run )
+    node1.rmatch <- node1.rmatch[ !is.na(node1.rmatch)] 
   
   V(g)$run     <- "NA"
-  V(g)$run[node1.match]        <- as.character( run.df$run[ node1.smatch ])
+  V(g)$run[node1.match]        <- as.character( run.df$run[ node1.rmatch ])
   
   V(g)$scientific_name     <- "NA"
-  V(g)$scientific_name[node1.match]        <- as.character( run.df$scientific_name[ node1.smatch ])
+  V(g)$scientific_name[node1.match]        <- as.character( run.df$scientific_name[ node1.rmatch ])
   
   V(g)$bioproject     <- "NA"
-  V(g)$bioproject[node1.match]        <- as.character( run.df$bio_project[ node1.smatch ])
+  V(g)$bioproject[node1.match]        <- as.character( run.df$bio_project[ node1.rmatch ])
   
   # Paint Edges =====================================================
   # For visualization, it's useful to color edges by sOTU-node / run-node properties
@@ -97,7 +97,7 @@ graph.virome2  <- function(virome.df  = NA,
   E(g)$bioproject      <- virome.df$bio_project
   E(g)$scientific_name <- virome.df$scientific_name
   
-  # Virome Enrichment Statistics ====================================
+  #Virome Enrichment Statistics ====================================
     
   # VRICH Calculation ---------------------------------
   # Get SRA-wide counts for each sotu
@@ -121,6 +121,9 @@ graph.virome2  <- function(virome.df  = NA,
   sotu.df$vrich <- round( sotu.df$n_vir / sotu.df$n_total, 4)
   
   # Assign
+  node2.smatch <- match( attributes(V(g))$names ,  sotu.df$sotu )
+  node2.smatch <- node2.smatch[ !is.na(node2.smatch)] 
+  
   V(g)$vrich     <-   -1
   V(g)$vrich[node2.match]      <- sotu.df$vrich[ node2.smatch ]
   
