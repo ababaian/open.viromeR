@@ -7,15 +7,15 @@ output:
     code_folding: hide
 params:
   ov.version: '0.0.8'
-  analysis_name: 'Apicomplexa'
-  search_type: "LIST"            # "LIST" or "STAT" or "SEARCH"
-  virome_search_term: '%%'  # Scientific_name search term
-  virome_deplete_term: '' # Deplete this term from matches, or '' for none
+  analysis_name: 'Eimeria'
+  search_type: "SEARCH"            # "LIST" or "STAT" or "SEARCH"
+  virome_search_term: '%Eimeria%'  # Scientific_name search term
+  virome_deplete_term: 'XXXXX' # Deplete this term from matches, or '' for none
   input.path: inst/extdata/apicomplexa # <prefix>.stat OR <prefix>.list
   control_type: 'BIOPROJECT'       # '' (N/A), 'SEARCH', 'LIST', or 'BIOPROJECT'
   control_search_term: ''          # Set '' to exclude control search
   control.path: inst/extdata/yeast
-  export.cytoscape: TRUE
+  export.cytoscape: FALSE
   prod.run: no
 editor_options:
   markdown:
@@ -152,10 +152,11 @@ if (p$search_type == "LIST"){
   virome.df    <- get.palmVirome(run.vec = virome.runs)
 } else if (p$search_type == "SEARCH"){
   # Retrieve virome using search term
-  virome.df    <- get.palmVirome(org.search = virome_search_term)
+  virome.df    <- get.palmVirome(org.search = p$virome_search_term)
   
   # Deplete terms (if available)
-  deplete.runs <- grep( virome_deplete_term, virome.df$scientific_name, ignore.case = T)
+  deplete.runs <- grep( p$virome_deplete_term, virome.df$scientific_name, ignore.case = T)
+  
   if (length(deplete.runs > 0)){
     virome.df    <- virome.df[ -deplete.runs, ]
   } else {
@@ -282,7 +283,6 @@ plot.virome.org <- ggplot(vorgx.df, aes( scientific_name, n,
   ylab("Count SRA Runs") + facet_wrap(~vRNA) +
   scale_fill_manual( values = p$ui.setcol)
 
-rm(vorgx.df)
 ```
 
 ```{r, fig.height = 4.5, fig.width = 9}
@@ -1026,57 +1026,3 @@ cbind( as.character(virx.df$sotu),
   )
 
 ```
-
-
-<!-- # Bespoke Analysis ------------------------------------------------------------- -->
-<!-- ```{r} -->
-<!-- virome.stat <- virome.stat[ order(virome.stat$total_count), ] -->
-<!-- virome.stat$logCount <- log10(virome.stat$total_count) -->
-<!-- # STAT Read Plot -->
-<!-- statReads <- ggplot( virome.stat, aes(logCount) ) + -->
-<!--   geom_histogram(bins = 50) + xlab('log10 (STAT Read Count)') + ylab('N SRA Runs') -->
-<!-- statReads -->
-<!-- ``` -->
-<!-- ```{r} -->
-<!-- # Candida-Astrovirus analysis -->
-<!-- meta.df <- read.csv('ov/candida/PRJNA827179.normalized.csv', header = T) -->
-<!-- meta.df$Condition = factor(meta.df$Condition) -->
-<!-- meta.df$Condition  <- factor( meta.df$Condition, -->
-<!--                               levels =  c( "WT", "UME6Off", "UME6On", -->
-<!--                                            "Ume6OfftoOn_0hr",  "Ume6OfftoOn_3hr", "Ume6OfftoOn_6hr", "Ume6OfftoOn_12hr", -->
-<!--                                            "Ume6OntoOff_0hr", "Ume6OntoOff_3hr", "Ume6OntoOff_6hr",   "Ume6OntoOff_12hr" )) -->
-<!-- astro.df <- virome.df[ (virome.df$tax_family  == 'Astroviridae'), ] -->
-<!-- astro.df <- astro.df[ !is.na(astro.df$run), ] -->
-<!-- meta.df <- merge(meta.df, astro.df, by.x = 'biosample_id', by.y = 'bio_sample', all.x = TRUE) -->
-<!-- #astro.df <- astro.df[ !is.na(astro.df$run), ] -->
-<!-- # astroPlot <- ggplot( astro.df[ astro.df$bio_project == 'PRJNA827179', ], -->
-<!-- #                      aes(total_count, node_coverage) ) + -->
-<!-- #   geom_point() + theme_bw() -->
-<!-- # astroPlot -->
-<!-- astroPlot <- ggplot( meta.df, aes(c_RPM, v_RPM) ) + -->
-<!--   geom_point() + theme_bw() + -->
-<!--    xlab('Candida_ReadsPerMillion') + -->
-<!--    ylab('Astrovirus_ReadsPerMillion') -->
-<!-- astroPlot -->
-<!-- cor(meta.df$v_RPM, meta.df$c_RPM) -->
-<!-- astroBar <- ggplot( meta.df, -->
-<!--                     aes(Condition, v_RPM, fill = Condition) ) + -->
-<!--   geom_boxplot() + geom_jitter() + theme_bw() + -->
-<!--    ylab('Astrovirus_ReadsPerMillion') -->
-<!-- astroBar -->
-<!-- astroBar2 <- ggplot( meta.df, -->
-<!--                     aes(Condition, c_RPM, fill = Condition) ) + -->
-<!--   geom_boxplot() + geom_jitter() + theme_bw() + -->
-<!--   ylab('Candida_ReadsPerMillion') -->
-<!-- astroBar2 -->
-<!-- ``` -->
-<!-- ```{r} -->
-<!-- rpmPlot <- ggplot( virome.df, aes(node_coverage, total_count, -->
-<!--                                   color = tax_family) ) + -->
-<!--   geom_point() + scale_x_log10() + scale_y_log10() + -->
-<!--   facet_wrap(~tax_family) + theme_bw() + theme(legend.position = "none") -->
-<!-- rpmPlot -->
-<!-- ``` -->
-
-
-

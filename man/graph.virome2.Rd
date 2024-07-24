@@ -4,10 +4,12 @@
 \alias{graph.virome2}
 \title{Convert virome.df into an Virome igraph object - all nodes}
 \usage{
-graph.virome2(virome.df = NA, con = SerratusConnect())
+graph.virome2(virome.df = NA, no.stats = FALSE, con = SerratusConnect())
 }
 \arguments{
 \item{virome.df}{data.frame, produced by the get.virome() function}
+
+\item{no.stats}{logical, do not calculate statistical tests [FALSE]}
 
 \item{con}{pq-connection, use SerratusConnect()}
 

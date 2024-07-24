@@ -6,6 +6,7 @@
 \usage{
 graph.palm(
   virome.df = NA,
+  sotu.vec = NA,
   pid.threshold = 30,
   expanded.graph = FALSE,
   all.edges = FALSE,
@@ -14,6 +15,8 @@ graph.palm(
 }
 \arguments{
 \item{virome.df}{data.frame, produced by the get.virome() function}
+
+\item{sotu.vec}{character, vector of sOTU id to retrieve}
 
 \item{pid.threshold}{numeric, min percent identity to include an edge [40]}
 

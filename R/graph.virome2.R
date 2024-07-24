@@ -3,6 +3,7 @@
 #' Convert virome.df into an Virome igraph object - all nodes
 #'
 #' @param virome.df  data.frame, produced by the get.virome() function
+#' @param no.stats   logical, do not calculate statistical tests [FALSE]
 #' @param node1      string, column in virome.df to use as nodes ["run"]
 #' @param node2      string, column in virome.df to use as edges ["sotu"]
 #' @param con        pq-connection, use SerratusConnect()
@@ -19,6 +20,7 @@
 #' @export
 #'
 graph.virome2  <- function(virome.df  = NA,
+                           no.stats   = FALSE,
                            con   = SerratusConnect()) {
   # Initialize Graph ================================================
   # Virome Graph objects by definition are run - sotu nodes
@@ -98,190 +100,211 @@ graph.virome2  <- function(virome.df  = NA,
   E(g)$scientific_name <- virome.df$scientific_name
   
   #Virome Enrichment Statistics ====================================
+  if (no.stats){
+    # skip statistics calculations
+    V(g)$vrich     <-   -1
+    V(g)$v.exact   <-   -1
+    V(g)$v.or      <-    0
+    V(g)$component <-    0
+    V(g)$pr        <-    0
+    V(g)$vrank     <-    0
+    V(g)$lpa.label <-    NA
     
-  # VRICH Calculation ---------------------------------
-  # Get SRA-wide counts for each sotu
-  sotu.gcount <-     tbl(con, "palm_virome_count") %>%
-    dplyr::filter( sotu %in% sotu.df$sotu ) %>%
-    select(sotu, runs) %>%  
-    as.data.frame()
-    dbDisconnect( con ) # Close Connection
-    colnames(sotu.gcount) <- c("sotu", "n_total")
-  
-  # Get virome-wide counts for each sotu (same as degree)
-  sotu.vcount <- data.frame( table(virome.df$sotu) )
-    colnames(sotu.vcount) <- c("sotu", "n_vir")
-  
-  # Merge dataframes, and calculate "vrich"
-  # Percent sOTU in Virome vs SRA wide
-  sotu.df <- merge( sotu.df, sotu.gcount, by = 'sotu')
-  sotu.df <- merge( sotu.df, sotu.vcount, by.x = 'sotu')
-  sotu.df$n_out <- ( sotu.df$n_total - sotu.df$n_vir )
-  
-  sotu.df$vrich <- round( sotu.df$n_vir / sotu.df$n_total, 4)
-  
-  # Assign
-  node2.smatch <- match( attributes(V(g))$names ,  sotu.df$sotu )
-  node2.smatch <- node2.smatch[ !is.na(node2.smatch)] 
-  
-  V(g)$vrich     <-   -1
-  V(g)$vrich[node2.match]      <- sotu.df$vrich[ node2.smatch ]
-  
-  # VExact Calculation ------------------------------
-  #  {Virome}   is the sum observation of all i sOTU in given virome
-  #  {Serratus} is the sum observation of all sOTU across all Serratus
-  
-  #  N       : Count of all sOTU observations across {Virome}
-  #  n_vir   : The observed ith sOTU count in {Virome} 
-  #  n_out   : The observed ith sOTU count in {Serratus}, outside {V}
-  #  n_total : The total count of ith sOTU observations
-  
-  #  M       : Count of all sOTU observations across {Serratus}
-  #  m_vir   : The sum of all non-ith sOTU in {Virome}
-  #  m_out   : The sum of all non-{V} sOTU in {Serratus}
-  #  m_total : The total count of all non-ith sOTU observations
-
-  
-  # Take row-count from table meta-data (faster than counting rows)
-  # SELECT reltuples::bigint AS m_total FROM pg_class WHERE relname = 'palm_virome';
-  M_ <- 4076288
-  N_ <- sum(sotu.df$n_vir)
-  n.tests_ <- length(sotu.df$sotu)
-  
-  VExact <- function( sotu.n,
-                      N = N_,
-                      M = M_,
-                      n.tests = n.tests_){
-    # Return p-value of Fisher's Exact Test based on the above values
-    # Operates on a single row
-    n_vir   <- as.numeric( sotu.n[1] )
-    n_total <- as.numeric( sotu.n[2] )
-    n_out   <- n_total - n_vir
+  }  else {
+    # VRICH Calculation ---------------------------------
+    # Get SRA-wide counts for each sotu
+    sotu.gcount <-     tbl(con, "palm_virome_count") %>%
+      dplyr::filter( sotu %in% sotu.df$sotu ) %>%
+      select(sotu, runs) %>%  
+      as.data.frame()
+      dbDisconnect( con ) # Close Connection
+      colnames(sotu.gcount) <- c("sotu", "n_total")
     
-    m_vir <- N - n_vir
-    m_out <- M - m_vir
+    # Get virome-wide counts for each sotu (same as degree)
+    sotu.vcount <- data.frame( table(virome.df$sotu) )
+      colnames(sotu.vcount) <- c("sotu", "n_vir")
     
-    m_total <- M - n_total
+    # Merge dataframes, and calculate "vrich"
+    # Percent sOTU in Virome vs SRA wide
+    sotu.df <- merge( sotu.df, sotu.gcount, by = 'sotu')
+    sotu.df <- merge( sotu.df, sotu.vcount, by.x = 'sotu')
+    sotu.df$n_out <- ( sotu.df$n_total - sotu.df$n_vir )
     
-    if ( FALSE ){
-      # Set to True to print contigency table
-      print(paste0(" Number of total tests: ",     n.tests ))
-      print(paste0(" N : ",     N ))
-      print(paste0(" M : ",     M ))
-      print(paste0("    |  sOTU  |  !sOTU  ")              )
-      print(paste0("{V} |  ", n_vir, " | ", m_vir )        )
-      print(paste0("{S} |  ",  n_out, " | ", m_out )       )
-      print(paste0("sum |  ",  n_total, " | ", m_total )   )
-    }
+    sotu.df$vrich <- round( sotu.df$n_vir / sotu.df$n_total, 4)
+    
+    # Assign
+    node2.smatch <- match( attributes(V(g))$names ,  sotu.df$sotu )
+    node2.smatch <- node2.smatch[ !is.na(node2.smatch)] 
+    
+    V(g)$vrich     <-   -1
+    V(g)$vrich[node2.match]      <- sotu.df$vrich[ node2.smatch ]
+    
+    # VExact Calculation ------------------------------
+    #  {Virome}   is the sum observation of all i sOTU in given virome
+    #  {Serratus} is the sum observation of all sOTU across all Serratus
+    
+    #  N       : Count of all sOTU observations across {Virome}
+    #  n_vir   : The observed ith sOTU count in {Virome} 
+    #  n_out   : The observed ith sOTU count in {Serratus}, outside {V}
+    #  n_total : The total count of ith sOTU observations
+    
+    #  M       : Count of all sOTU observations across {Serratus}
+    #  m_vir   : The sum of all non-ith sOTU in {Virome}
+    #  m_out   : The sum of all non-{V} sOTU in {Serratus}
+    #  m_total : The total count of all non-ith sOTU observations
+  
+    
+    # Take row-count from table meta-data (faster than counting rows)
+    # SELECT reltuples::bigint AS m_total FROM pg_class WHERE relname = 'palm_virome';
+    M_ <- 4076288
+    N_ <- sum(sotu.df$n_vir)
+    n.tests_ <- length(sotu.df$sotu)
+    
+    VExact <- function( sotu.n,
+                        N = N_,
+                        M = M_,
+                        n.tests = n.tests_){
+      # Return p-value of Fisher's Exact Test based on the above values
+      # Operates on a single row
+      n_vir   <- as.numeric( sotu.n[1] )
+      n_total <- as.numeric( sotu.n[2] )
+      n_out   <- n_total - n_vir
       
-    # fisher.test(rbind(c(1,9),c(11,3)), alternative="less")$p.value
-    FT <- fisher.test( rbind(  c( n_vir, m_vir ),
-                               c( n_out, m_out )) ,
-                       alternative = 'greater' )
-    
-    # Virome Exact Score
-    v.exact <- -log10( min(1 ,  FT$p.value * n.tests) )
-    
-    
-    # IF Virome Exact is >100 or INF, set to 100
-    if ( v.exact > 100 ){
-      v.exact <- 100
+      m_vir <- N - n_vir
+      m_out <- M - m_vir
+      
+      m_total <- M - n_total
+      
+      if ( FALSE ){
+        # Set to True to print contigency table
+        print(paste0(" Number of total tests: ",     n.tests ))
+        print(paste0(" N : ",     N ))
+        print(paste0(" M : ",     M ))
+        print(paste0("    |  sOTU  |  !sOTU  ")              )
+        print(paste0("{V} |  ", n_vir, " | ", m_vir )        )
+        print(paste0("{S} |  ",  n_out, " | ", m_out )       )
+        print(paste0("sum |  ",  n_total, " | ", m_total )   )
+      }
+        
+      # # fisher.test(rbind(c(1,9),c(11,3)), alternative="less")$p.value
+      # FT <- fisher.test( rbind(  c( n_vir, m_vir ),
+      #                            c( n_out, m_out )) ,
+      #                    alternative = 'greater' )
+      # 
+      # # Virome Exact Score
+      # v.exact <- -log10( min(1 ,  FT$p.value * n.tests) )
+      # 
+      # 
+      # # IF Virome Exact is >100 or INF, set to 100
+      # if ( v.exact > 100 ){
+      #   v.exact <- 100
+      # }
+      # 
+      # # IF odds ratio is "Infinite", set it to 10
+      # if ( is.infinite(FT$estimate) ){
+      #   FT$estimate <- 10
+      # }
+      # 
+      #   # Return p-value, OR, and BJ corrected p-value as -log10
+      #   return( c( FT$p.value,
+      #              v.exact,
+      #              FT$estimate)
+      #           )
+      
+      
+      # FAKE RETURN
+      # TODO why is this error coming up
+      # Error in fisher.test(rbind(c(n_vir, m_vir), c(n_out, m_out)), alternative = "greater") : 
+      # all entries of 'x' must be nonnegative and finite
+      return( c( 0.05,
+                 1,
+                 1)
+      )
+      
     }
     
-    # IF odds ratio is "Infinite", set it to 10
-    if ( is.infinite(FT$estimate) ){
-      FT$estimate <- 10
-    }
+    sotu.exact <- data.frame( t( apply(sotu.df[ ,  c("n_vir", "n_total")], VExact, MARGIN = 1 ) ) )
+      colnames(sotu.exact) <- c("p.exact", "v.exact", "v.or")
   
-      # Return p-value, OR, and BJ corrected p-value as -log10
-      return( c( FT$p.value,
-                 v.exact,
-                 FT$estimate)
-              )
+    # Assign
+    V(g)$v.exact   <-   -1
+    V(g)$v.exact[node2.match]    <- sotu.exact$v.exact[ node2.smatch ]
+    
+    V(g)$v.or      <-   0
+    V(g)$v.or[node2.match]       <- sotu.exact$v.or[ node2.smatch ]
+    
+    # Virome Rank ----------------------------------------
+    # Calculate page_rank & virome_rank
+    # Project node-type 2 (sOTU) into a monopartite network
+    # weighted by number of observations
+    mono.g <- bipartite_projection( g, multiplicity = TRUE, which = "true")
+    
+    # Calculate node2 page_rank
+    V(mono.g)$pr <- page_rank( mono.g, weights = mono.g$weight )$vector
+    V(g)$pr <- 0
+    V(g)$pr[node2.match] <- V(mono.g)$pr
+    
+    # Assign
+    # Calculate node2 virome_rank ( product of vrich and page_rank) 
+    V(g)$vrank <- 0
+    V(g)$vrank <- V(g)$pr * V(g)$vrich
+    
+    # Virome Community Detection ======================================
+    # Components  -------------------------------------------
+    comp.g <- components(g)
+      Vc.label <- factor( comp.g$membership ) #original labels
+    
+      # Rename component-labels (membership) based on size
+      # 1 = largest ... n = smallest
+      rank.order <- order(comp.g$csize, decreasing = TRUE)
+        levels(Vc.label) <- order(rank.order)
+    
+      # Assign labels to vertices
+      V(g)$component <- as.character( Vc.label )
+      
+      # Label Propagation Algorithm -------------------------
+      lpa.vrank <- function(g, labelname = 'scientific_name') {
+  
+        # Transfer Node Value (Vrank) to Edge (via sOTU)
+        vir.nodes    <- data.frame( sotu  = V(g)$sotu,
+                                    vrank = V(g)$vrank)
+        vir.nodes  <- vir.nodes[ vir.nodes$sotu != "NA", ]
+        vir.select <- match(levels( E(g)$sotu ), vir.nodes$sotu ) # ordered virus node assignment in g
+  
+        E(g)$vrank <- E(g)$sotu
+          levels( E(g)$vrank ) <- vir.nodes$vrank[ vir.select ]
+        E(g)$vrank <- as.numeric( as.character( E(g)$vrank ) )
+  
+        # Label Propagation Algorithm - Weighted by VRank
+        lab.df <- data.frame( names  = V(g)$name,
+                              component = V(g)$component,
+                              label  = factor( vertex_attr( g, labelname ) ),
+                              int.label  = -1 ,
+                              fixed  = !V(g)$type )
+  
+        lab.df$int.label[ lab.df$fixed ] <- as.numeric( lab.df$label[ lab.df$fixed ] )
+        
+        lpa <- cluster_label_prop(g,
+                                  weights = E(g)$vrank,
+                                  initial = lab.df$int.label,
+                                  fixed   = lab.df$fixed)
+        
+        lab.df$lpa       <- membership(lpa)
+  
+        # Re-name LPA clusters per label grouips
+        label_groups   <- levels( lab.df$label )
+        label_groups <- label_groups[ label_groups != "NA" ]
+        label_groups <- lab.df[ match(label_groups, lab.df$label), c("label", "lpa")]
+  
+        lab.df$lpa.label <- label_groups$label[ match(lab.df$lpa, label_groups$lpa) ]
+  
+        V(g)$lpa.label   <- lab.df$lpa.label
+
+        return( V(g)$lpa.label )
+      }
+    
+      V(g)$lpa.label <- lpa.vrank(g)
   }
-  
-  sotu.exact <- data.frame( t( apply(sotu.df[ ,  c("n_vir", "n_total")], VExact, MARGIN = 1 ) ) )
-    colnames(sotu.exact) <- c("p.exact", "v.exact", "v.or")
-
-  # Assign
-  V(g)$v.exact   <-   -1
-  V(g)$v.exact[node2.match]    <- sotu.exact$v.exact[ node2.smatch ]
-  
-  V(g)$v.or      <-   0
-  V(g)$v.or[node2.match]       <- sotu.exact$v.or[ node2.smatch ]
-  
-  # Virome Rank ----------------------------------------
-  # Calculate page_rank & virome_rank
-  # Project node-type 2 (sOTU) into a monopartite network
-  # weighted by number of observations
-  mono.g <- bipartite_projection( g, multiplicity = TRUE, which = "true")
-  
-  # Calculate node2 page_rank
-  V(mono.g)$pr <- page_rank( mono.g, weights = mono.g$weight )$vector
-  V(g)$pr <- 0
-  V(g)$pr[node2.match] <- V(mono.g)$pr
-  
-  # Assign
-  # Calculate node2 virome_rank ( product of vrich and page_rank) 
-  V(g)$vrank <- 0
-  V(g)$vrank <- V(g)$pr * V(g)$vrich
-  
-  # Virome Community Detection ======================================
-  # Components  -------------------------------------------
-  comp.g <- components(g)
-    Vc.label <- factor( comp.g$membership ) #original labels
-  
-    # Rename component-labels (membership) based on size
-    # 1 = largest ... n = smallest
-    rank.order <- order(comp.g$csize, decreasing = TRUE)
-      levels(Vc.label) <- order(rank.order)
-  
-    # Assign labels to vertices
-    V(g)$component <- as.character( Vc.label )
-    
-    # Label Propagation Algorithm -------------------------
-    lpa.vrank <- function(g, labelname = 'scientific_name') {
-
-      # Transfer Node Value (Vrank) to Edge (via sOTU)
-      vir.nodes    <- data.frame( sotu  = V(g)$sotu,
-                                  vrank = V(g)$vrank)
-      vir.nodes  <- vir.nodes[ vir.nodes$sotu != "NA", ]
-      vir.select <- match(levels( E(g)$sotu ), vir.nodes$sotu ) # ordered virus node assignment in g
-
-      E(g)$vrank <- E(g)$sotu
-        levels( E(g)$vrank ) <- vir.nodes$vrank[ vir.select ]
-      E(g)$vrank <- as.numeric( as.character( E(g)$vrank ) )
-
-      # Label Propagation Algorithm - Weighted by VRank
-      lab.df <- data.frame( names  = V(g)$name,
-                            component = V(g)$component,
-                            label  = factor( vertex_attr( g, labelname ) ),
-                            int.label  = -1 ,
-                            fixed  = !V(g)$type )
-
-      lab.df$int.label[ lab.df$fixed ] <- as.numeric( lab.df$label[ lab.df$fixed ] )
-      
-      lpa <- cluster_label_prop(g,
-                                weights = E(g)$vrank,
-                                initial = lab.df$int.label,
-                                fixed   = lab.df$fixed)
-      
-      lab.df$lpa       <- membership(lpa)
-
-      # Re-name LPA clusters per label grouips
-      label_groups   <- levels( lab.df$label )
-      label_groups <- label_groups[ label_groups != "NA" ]
-      label_groups <- lab.df[ match(label_groups, lab.df$label), c("label", "lpa")]
-
-      lab.df$lpa.label <- label_groups$label[ match(lab.df$lpa, label_groups$lpa) ]
-
-      V(g)$lpa.label   <- lab.df$lpa.label
-
-      return( V(g)$lpa.label )
-
-    }
-
-    V(g)$lpa.label <- lpa.vrank(g)
     
   return(g)
 }

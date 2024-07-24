@@ -2,7 +2,8 @@
 #'
 #' Convert virome.df into a palmprint-palmprint igraph object
 #'
-#' @param virome.df  data.frame, produced by the get.virome() function
+#' @param virome.df   data.frame, produced by the get.virome() function
+#' @param sotu.vec    character, vector of sOTU id to retrieve
 #' @param pid.threshold numeric, min percent identity to include an edge [40]
 #' @param con        pq-connection, use SerratusConnect()
 #' @return graph.virome, an igraph object
@@ -17,16 +18,30 @@
 #' @export
 #'
 graph.palm     <- function(virome.df = NA,
+                           sotu.vec  = NA,
                            pid.threshold = 30,
                            expanded.graph = FALSE,
                            all.edges      = FALSE,
                            con = SerratusConnect()) {
-  # Paint vertices/edges from virome.df
-  sotu.df <- distinct( virome.df[ , c('sotu', 'nickname', 'gb_pid', 'gb_acc', 'tax_species', 'tax_family')])
   
-  # Reduce sOTU list to unique entries
-  sotu.vec <- as.character( sotu.df$sotu )
-  
+  if ( !is.na( virome.df ) ){
+    # virome.df provided
+    # Paint vertices/edges from virome.df
+    sotu.df <- distinct( virome.df[ , c('sotu', 'nickname', 'gb_pid', 'gb_acc', 'tax_species', 'tax_family')])
+    # Reduce sOTU list to unique entries
+    sotu.vec <- as.character( sotu.df$sotu )
+  } else if ( !is.na( sotu.vec ) ) {
+    sotu.vec <- as.character( sotu.vec )
+    sotu.df  <- data.frame( sotu = sotu.vec,
+                            nickname = NA,
+                            gb_pid   = NA,
+                            gb_acc   = NA,
+                            tax_species = NA,
+                            tax_family  = NA)
+  } else {
+    stop("virome.df or sotu.vec must be provided as input.")
+  }
+    
   # Get palmVirome based on sra.vec
   # add self-identity (100%)
   sotu.edge <- tbl(con, "palm_graph") %>%

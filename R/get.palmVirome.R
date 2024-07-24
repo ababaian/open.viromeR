@@ -25,6 +25,10 @@ get.palmVirome <- function(run.vec    = NA,
                            rm.fp = TRUE ) {
   
   if ( !is.na(run.vec)[1] ){
+  if (class(run.vec) != 'character'){
+    stop("run.vec must be a character input")
+  }
+  
   # Get palmVirome based on sra.vec 
   virome.df <- tbl(con, "palm_virome") %>%
     dplyr::filter( run %in% run.vec ) %>%
