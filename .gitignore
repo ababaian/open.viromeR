@@ -14,3 +14,5 @@ tmp/*
 var/*
 ov/*
 analysis_scratch.Rmd
+
+notebook/*
