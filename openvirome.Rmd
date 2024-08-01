@@ -1,6 +1,6 @@
 ---
-#title: 'Open Virome: Earths viruses in your palm'
-title: 'title'
+title: 'Open Virome: Earths viruses in your palm'
+#title: 'title'
 author: 'ababaian'
 date:   '240801'
 output:
@@ -11,14 +11,14 @@ output:
     keep_md: yes
 params:
   ov.version: 0.0.8
-  analysis_name: Eimeria
-  search_type: SEARCH
-  virome_search_term: '%Eimeria%'
-  virome_deplete_term: XXXXX
-  input.path: inst/extdata/apicomplexa
-  control_type: BIOPROJECT
-  control_search_term: ''
-  control.path: inst/extdata/yeast
+  analysis_name: Eimeria                # Short analysis title
+  search_type: SEARCH                   # "LIST" or "STAT" or "SEARCH"
+  virome_search_term: '%Eimeria%'       # Scientific_name search term
+  virome_deplete_term: ''               # Deplete this SEARCH term,  '' for none
+  input.path: inst/extdata/apicomplexa  # <prefix> for .stat or .list file
+  control_type: BIOPROJECT              # '' (N/A), 'SEARCH', 'LIST', 'BIOPROJECT', 'RANDOM'
+  control_search_term: ''               # '' for none
+  control.path: inst/extdata/yeast      # <prefix> for .stat or .list file
   export.cytoscape: true
   prod.run: false
 editor_options:
@@ -124,9 +124,7 @@ p$ui.setcol <- c('gray50', 'cornflowerblue')
 ```
 
 ```{r initialize message}
-# Print out version
-# TODO Merge the print output of parameters with the generation of the parameters above
-
+# Print Parameter Settings
 cat( paste0("Open Virome Version: ", p$ov.version), "\n")
 cat( paste0("Timestamp: ", p$report_id), "\n" )
 cat( paste0("Analyzing: ", p$analysis_name), "\n")
