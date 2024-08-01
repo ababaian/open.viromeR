@@ -19,6 +19,7 @@ params:
   control_type: BIOPROJECT              # '' (N/A), 'SEARCH', 'LIST', 'BIOPROJECT', 'RANDOM'
   control_search_term: ''               # '' for none
   control.path: inst/extdata/yeast      # <prefix> for .stat or .list file
+  output.path:  ./                      # <prefix> for output Data files
   export.cytoscape: true
   prod.run: false
 editor_options:
@@ -44,10 +45,16 @@ editor_options:
 ```
 
 ```{css, echo=FALSE}
+div.main-container {
+  max-width: 1600px !important;
+}
+
 /* Move code folding buttons to the left */
 div.col-md-12 .pull-right {
   float: left !important
 }
+
+
 ```
 
 ```{r production, include=FALSE, warning=FALSE}
@@ -56,8 +63,7 @@ production.version = params$prod.run
 
 if (production.version) {
   # Load stable palmid package
-  library('palmid', quietly = T)
-  data("palmdb")
+  library('open.viromeR', quietly = T)
 
   # Disable warnings
    defaultW <- getOption("warn")
@@ -69,7 +75,6 @@ if (production.version) {
 
   # Compile a new palmid from source
   roxygen2::roxygenise()
-  load("data/palmdb.RData")
 }
 
 rm( defaultW, production.version )
@@ -98,9 +103,9 @@ if (is.null(p$input.path)) {
   p$input.stat      <- paste0(p$input.path, '.stat' )   # STAT-based query
 
 # Output HTML Report
-p$report_id      <- format(Sys.time(),  "%Y%m%d_%H%M%S") 
-p$output.html   <- paste0(p$analysis_name, p$report_id, '.html')
-p$output.rdata  <- paste0(p$analysis_name, p$report_id, '.RData')
+p$report_id      <- format(Sys.time(),  "%Y%m%d_%H%M%S")
+p$output.html   <- paste0(p$output.path, p$analysis_name, '_', p$report_id, '.html')
+p$output.rdata  <- paste0(p$output.path, p$analysis_name, '_', p$report_id, '.RData')
 
 # Search Parameters
 # Search Term of SRA "Scientific Name" field,
@@ -110,10 +115,8 @@ p$output.rdata  <- paste0(p$analysis_name, p$report_id, '.RData')
 # Exclude control logical variable
 if (p$control_type == ''){
   # No Control Run set calculated
-  print("hi")
   p$doControl <- FALSE
 } else {
-  print ('bi')
   p$doControl <- TRUE
 }
 
@@ -123,37 +126,38 @@ if (p$control_type == ''){
 p$ui.setcol <- c('gray50', 'cornflowerblue')
 ```
 
-```{r initialize message}
-# Print Parameter Settings
-cat( paste0("Open Virome Version: ", p$ov.version), "\n")
-cat( paste0("Timestamp: ", p$report_id), "\n" )
-cat( paste0("Analyzing: ", p$analysis_name), "\n")
-
-cat("\n")
-cat("Parameters:\n")
-cat( paste0("-- Search Type: ", p$search_type), "\n")
-cat( paste0("-- Taxa search term: ", p$virome_search_term), "\n")
-if (p$doControl){
-  cat( paste0("-- Control search type: ", p$control_type , "\n" ))
-  cat( paste0("-- Control search term: ", p$control_search_term , "\n" ))
-} else {
-  cat( paste0("-- No Control Set Defined" , "\n" ))  
+```{r initialize message, echo = FALSE}
+parameter_summary <- function(p){
+  # Print Parameter Settings
+  cat( paste0("Open Virome Version: ", p$ov.version), "\n")
+  cat( paste0("Timestamp: ", p$report_id), "\n" )
+  cat( paste0("Analyzing: ", p$analysis_name), "\n")
+  
+  cat("\n")
+  cat("Parameters:\n")
+  cat( paste0("-- Search Type: ", p$search_type), "\n")
+  cat( paste0("-- Taxa search term: ", p$virome_search_term), "\n")
+  if (p$doControl){
+    cat( paste0("-- Control search type: ", p$control_type , "\n" ))
+    cat( paste0("-- Control search term: ", p$control_search_term , "\n" ))
+  } else {
+    cat( paste0("-- No Control Set Defined" , "\n" ))  
+  }
+  cat( paste0("-- Cytoscape Export: ", p$export.cytoscape), "\n")
+  
+  cat("\n")
+  cat( paste0("Output Report: ", p$output.html), "\n")
+  cat( paste0("Output RData : ", p$output.rdata), "\n")
 }
-cat( paste0("-- Cytoscape Export: ", p$export.cytoscape), "\n")
 
-cat("\n")
-cat( paste0("Output Report: ", p$output.html), "\n")
-cat( paste0("Output RData : ", p$output.rdata), "\n")
+parameter_summary(p)
 ```
 
-```{r, echo = FALSE}
+```{r virome import, include = FALSE, echo = FALSE}
 # Import Virome -------------------------------------------
-if (p$search_type == "LIST"){
-  # Retrieve Virome using a SRA Run vector
-  virome.runs  <- read.csv(p$input.list)[,1]
-  #virome.runs <- XXXXXX # Manual Override
-  virome.df    <- get.palmVirome(run.vec = virome.runs)
-} else if (p$search_type == "SEARCH"){
+
+# SQL QUERY SEARCH ~~~~~~~~~~
+if (p$search_type == "SEARCH"){
   # Retrieve virome using search term
   virome.df    <- get.palmVirome(org.search = p$virome_search_term)
   
@@ -168,7 +172,16 @@ if (p$search_type == "LIST"){
   } # else no depletion selected
   
   virome.runs  <- virome.df$run
-  
+
+# LIST SEARCH ~~~~~~~~~~~~~~~
+} else if (p$search_type == "LIST"){
+  # Retrieve Virome using a SRA Run vector
+  virome.runs  <- read.csv(p$input.list)[,1]
+  #virome.runs <- XXXXXX # Manual Override
+  virome.df    <- get.palmVirome(run.vec = virome.runs)
+
+
+# STAT SEARCH ~~~~~~~~~~~~~
 } else if (p$search_type == "STAT"){
   # Retrieve Virome using a SRA-STAT table
   virome.stat  <- read.csv(input.stat, header = T)
@@ -183,7 +196,10 @@ if (p$search_type == "LIST"){
 
 # Melt virome data.frame, group by "sOTU"
 virx.df   <- melt.virome( virome.df )
-  
+
+```
+
+```{r control virome, include = FALSE, echo = FALSE}
 # Import Control Virome -----------------------------------
 if (p$control_type == "LIST"){
   # Retrieve Virome using a SRA Run vector
@@ -214,7 +230,7 @@ if (p$control_type == "LIST"){
 }
 ```
 
-```{r, echo = FALSE}
+```{r merge viromes, include = FALSE, echo = FALSE}
 # Modify Virome Data.Frame for plotting
 # Append Control Virome
 if (p$doControl){
@@ -254,7 +270,7 @@ virx.df  %>%
   downloadthis::download_this(
     output_name = paste0(p$input.path, '_virome_summary.csv'),
     output_extension = ".csv",
-    button_label = "Download virome_sumnmary.csv",
+    button_label = "Download virome_summary.csv",
     button_type = "success",
     has_icon = TRUE,
     icon = "fa fa-file-export"
@@ -289,13 +305,13 @@ plot.virome.org <- ggplot(vorgx.df, aes( scientific_name, n,
 
 ```
 
-```{r, fig.height = 4.5, fig.width = 9}
+```{r, echo = FALSE, fig.height = 4.5, fig.width = 10}
 # Virome bar plot of "Scientific Name" Fields
 plotly::hide_legend( plot.virome.org )
 
 ```
 
-```{r, echo = FALSE}
+```{r, include = FALSE, echo = FALSE}
 # Retrieve SRA Meta-data for virome data.frame
 sra.df <- get.sraMeta( virome.df2$run, con = con, ordinal = TRUE)
 
@@ -338,7 +354,7 @@ plot.sra.dataType2 <- ggplot(sra.data, aes( x = library_strategy, Gbp,
 rm( sra.data, sra.data.nt)
 ```
 
-```{r,  fig.height = 8, fig.width = 10, retina = 3}
+```{r, echo = FALSE, fig.height = 8, fig.width = 10, retina = 3}
 # SRA Datasets Type
 plot.sra.dataType
 plot.sra.dataType2
@@ -384,7 +400,7 @@ plot.bp.hist <- ggplot(bp.df, aes( x = bp_n )) +
 #   theme(aspect.ratio = 0.6, legend.position = "none")
 ```
 
-```{r,  fig.height = 8, fig.width = 10, retina = 3}
+```{r,  echo = FALSE, fig.height = 8, fig.width = 10, retina = 3}
 # SRA Datasets Type
 #plotly::hide_legend( bp.Size )
 plot.bp.Size
@@ -419,7 +435,7 @@ plot.virFam.n <- ggplot(virFam.df, aes( tax_family, n)) +
   ylab("Count") + facet_wrap(~set)
 ```
 
-```{r,  fig.height = 4, fig.width = 8, retina = 3}
+```{r,  echo = FALSE, fig.height = 4, fig.width = 8, retina = 3}
 plot.virFam.n
 ```
 
@@ -443,7 +459,7 @@ plot.virFam.xy <- ggplot(virFam.df, aes( n_run, n_sotu, color = tax_family)) +
 
 ```
 
-```{r,  fig.height = 8, fig.width = 10, retina = 3}
+```{r,  echo = FALSE, fig.height = 8, fig.width = 10, retina = 3}
 # SRA Datasets Type
 plotly::hide_legend( plot.virFam.xy )
 ```
@@ -470,7 +486,7 @@ virFam.df <- as.matrix(virFam.df)
 rm( bpTop, bpTop.n, bp.df, bp.total.n)
 ```
 
-```{r,  fig.height = 6, fig.width = 10, retina = 3}
+```{r, echo = FALSE, fig.height = 6, fig.width = 10, retina = 3}
 # Virome Family count bar plot
 plot.virFam.heat <- gplots::heatmap.2(virFam.df, trace = "none", 
                                breaks = c(0,1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
@@ -505,12 +521,12 @@ virome2.org <- ggplot(vorgx.df2, aes( x = tax_family, n,
 
 ### Label Summary {#meta-data-module}
 
-```{r,  fig.height = 8, fig.width = 10, retina = 3}
+```{r, echo = FALSE, fig.height = 8, fig.width = 10, retina = 3}
 # Per "Species" family-levle virome summary
 virome2.org
 ```
 
-```{r}
+```{r, include = FALSE}
 # TODO
 ## Not working with >20 bioProjects
 # # Create a data.frame to plot a heatmap of Virus Family Expression
@@ -539,7 +555,7 @@ virome2.org
 #                                margins = c(10,10), sepcolor=NULL)
 ```
 
-```{r}
+```{r, include = FALSE}
 # TODO
 #library(vegan)
 
@@ -551,18 +567,13 @@ virome2.org
 
 ### Network Analysis {#network-module}
 
-```{r, echo = FALSE}
-#library(igraph)
-#library(RCy3)
-#library(reshape2)
-#library(viridis)
-
+```{r load virome graph, echo = FALSE}
 # Create a bipartite (sOTU + Run) graph based on the virome
 vir.g <- graph.virome2(virome.df)
 
 ```
 
-```{r}
+```{r visualize graph, echo = FALSE}
 # Plot Network (add conditional to avoid plotting large networks)
 # Interactive plot with pull-down of components of the network
 if ( length( V(vir.g) ) < 2000 & length( E(vir.g) ) < 5000 ) {
@@ -585,8 +596,9 @@ if ( length( V(vir.g) ) < 2000 & length( E(vir.g) ) < 5000 ) {
   print("Skipping network plot, >1000 Nodes or >5000 edges")
 }
 ```
+#### Virome Graph Components
 
-```{r}
+```{r component analysis, include = FALSE}
 # Component-wise statistics for the network
 component.stats <- function(g){
   # For each "component" in a graph, calculates
@@ -643,7 +655,7 @@ rm(component.stats)
   cs.df$perc_sotu <- 100 *   cs.df$n_sotu / cs.df$n_nodes
 ```
 
-```{r}
+```{r, echo = FALSE}
 # Plot variables
 netlim <- c(1, max(with(cs.df, c(n_nodes, n_edge)))) # Network size limit (log)
 nodelim <- c(0, max(with(cs.df, c(n_sotu, n_run)))) # Node Range Limits
@@ -705,7 +717,7 @@ rm(netlim, nodelim, dlim)
 
 ```
 
-```{r}
+```{r, echo = FALSE}
 plot.comp1
 plot.comp2
 plot.comp3

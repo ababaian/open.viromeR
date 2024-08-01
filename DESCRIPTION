@@ -1,19 +1,12 @@
-Package: palmid
-Title: Viral RNA Dependent RNA Polymerase Analysis Suite
-Description: R Analysis suite for viral RNA dependent RNA polymerase (RdRP). 
-    Statistical and meta-data analysis of 'palmscan' output and 'palmDB'/
-    'DIAMOND' alignment files. Cross reference an input RNA virus against
-    145,000 RdRP identified in the Serratus project.
-    Non-CRAN dependency is ggmsa (https://github.com/YuLab-SMU/ggmsa) which
-    is available on Bioconductor.
+Package: open.viromeR
+Title: Open Virome R-interface
+Description: Holding Earth's viruses in your palm
 Version: 0.0.6
 Authors@R: c( 
   person("Artem", "Babaian", , "artem@rRNA.ca", role = c("aut", "cre"),
-    comment = c(ORCID = "0000-0002-4315-6262")),
-  person("Hannah", "Le", , "hannah.lgbhan@gmail.com", role = "aut")
-    )
-URL: https://serratus.io/palmid
-BugReports: https://github.com/ababaian/palmid/issues
+    comment = c(ORCID = "0000-0002-4315-6262"))
+URL: https://www.openvirome.com
+BugReports: https://github.com/serratus-bio/open-virome/issues
 License: AGPL-3
 Encoding: UTF-8
 LazyData: true
@@ -54,6 +47,3 @@ Imports:
 Depends:
     dplyr,
     ggplot2 (>= 3.3.3)
-Remotes:
-    bioc::release/ggtree,
-    bioc::release/ggmsa
