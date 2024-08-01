@@ -589,7 +589,7 @@ if ( length( V(vir.g) ) < 2000 & length( E(vir.g) ) < 5000 ) {
   if (p$export.cytoscape == TRUE ){
     RCy3::createNetworkFromIgraph(vir.g, paste0("Virome - ", p$analysis_name,
                                                 ":",         p$report_id) )
-    RCy3::setVisualStyle("001 Open Virome - Vrank")
+    RCy3::setVisualStyle("ov001 virome")
     RCy3::layoutNetwork('kamada-kawai edgeAttribute=pid')
   }
 } else {
@@ -774,6 +774,9 @@ if ( length( V(palm.g) ) < 2000 & length( E(palm.g) ) < 5000 ) {
   if (p$export.cytoscape == TRUE ){
     RCy3::createNetworkFromIgraph(palm.g, paste0("Palmnet - ", p$analysis_name,
                                                  ":",          p$report_id) )
+    RCy3::setVisualStyle("ov002 palmnet")
+
+    
   }
 } else {
   print("Skipping network plot, >1000 Nodes or >5000 edges")
