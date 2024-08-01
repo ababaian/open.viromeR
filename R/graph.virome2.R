@@ -112,7 +112,7 @@ graph.virome2  <- function(virome.df  = NA,
     
   }  else {
     # VRICH Calculation ---------------------------------
-    # Get SRA-wide counts for each sotu
+    # Get SRA-wide counts for each sotu-run
     sotu.gcount <-     tbl(con, "palm_virome_count") %>%
       dplyr::filter( sotu %in% sotu.df$sotu ) %>%
       select(sotu, runs) %>%  
@@ -121,16 +121,16 @@ graph.virome2  <- function(virome.df  = NA,
       colnames(sotu.gcount) <- c("sotu", "n_total")
     
     # Get virome-wide counts for each sotu (same as degree)
-    sotu.vcount <- data.frame( table(virome.df$sotu) )
+    sotu.vcount <- data.frame( table(virome.df$sotu[ !duplicated(virome.df[c('run', 'sotu')]) ] ))
       colnames(sotu.vcount) <- c("sotu", "n_vir")
     
     # Merge dataframes, and calculate "vrich"
     # Percent sOTU in Virome vs SRA wide
     sotu.df <- merge( sotu.df, sotu.gcount, by = 'sotu')
-    sotu.df <- merge( sotu.df, sotu.vcount, by.x = 'sotu')
+    sotu.df <- merge( sotu.df, sotu.vcount, by = 'sotu')
     sotu.df$n_out <- ( sotu.df$n_total - sotu.df$n_vir )
     
-    sotu.df$vrich <- round( sotu.df$n_vir / sotu.df$n_total, 4)
+    sotu.df$vrich <- sotu.df$n_vir / sotu.df$n_total
     
     # Assign
     node2.smatch <- match( attributes(V(g))$names ,  sotu.df$sotu )
@@ -186,40 +186,43 @@ graph.virome2  <- function(virome.df  = NA,
         print(paste0("sum |  ",  n_total, " | ", m_total )   )
       }
         
-      # # fisher.test(rbind(c(1,9),c(11,3)), alternative="less")$p.value
-      # FT <- fisher.test( rbind(  c( n_vir, m_vir ),
-      #                            c( n_out, m_out )) ,
-      #                    alternative = 'greater' )
-      # 
-      # # Virome Exact Score
-      # v.exact <- -log10( min(1 ,  FT$p.value * n.tests) )
-      # 
-      # 
-      # # IF Virome Exact is >100 or INF, set to 100
-      # if ( v.exact > 100 ){
-      #   v.exact <- 100
-      # }
-      # 
-      # # IF odds ratio is "Infinite", set it to 10
-      # if ( is.infinite(FT$estimate) ){
-      #   FT$estimate <- 10
-      # }
-      # 
-      #   # Return p-value, OR, and BJ corrected p-value as -log10
-      #   return( c( FT$p.value,
-      #              v.exact,
-      #              FT$estimate)
-      #           )
+      # fisher.test(rbind(c(1,9),c(11,3)), alternative="less")$p.value
+      FT <- fisher.test( rbind(  c( n_vir, m_vir ),
+                                 c( n_out, m_out )) ,
+                         alternative = 'greater' )
+
+      # Virome Exact Score w/ Bonferonni correction
+      v.exact <- -log10( min(1 ,  FT$p.value * n.tests) )
+
+      # IF Virome Exact is >100 or INF, set to 10
+      if ( v.exact > 10 ){
+        v.exact <- 10
+      }
       
+      # IF Virome Exact is == 0, set it to 0.1
+      if ( v.exact == 0){
+        v.exact <- 0.1
+      }
+
+      # IF odds ratio is "Infinite", set it to 10
+      if ( is.infinite(FT$estimate) ){
+        FT$estimate <- 10
+      }
+
+        # Return p-value, OR, and BJ corrected p-value as -log10
+        return( c( FT$p.value,
+                   v.exact,
+                   FT$estimate)
+                )
       
       # FAKE RETURN
       # TODO why is this error coming up
       # Error in fisher.test(rbind(c(n_vir, m_vir), c(n_out, m_out)), alternative = "greater") : 
       # all entries of 'x' must be nonnegative and finite
-      return( c( 0.05,
-                 1,
-                 1)
-      )
+      # return( c( 0.05,
+      #            1,
+      #            1)
+      # )
       
     }
     
@@ -247,7 +250,7 @@ graph.virome2  <- function(virome.df  = NA,
     # Assign
     # Calculate node2 virome_rank ( product of vrich and page_rank) 
     V(g)$vrank <- 0
-    V(g)$vrank <- V(g)$pr * V(g)$vrich
+    V(g)$vrank <- V(g)$pr * V(g)$vrich * V(g)$v.exact
     
     # Virome Community Detection ======================================
     # Components  -------------------------------------------

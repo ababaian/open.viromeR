@@ -1,29 +1,36 @@
 ---
-title: 'Open Virome: Earths viruses in your palm'
+#title: 'Open Virome: Earths viruses in your palm'
+title: 'title'
+author: 'ababaian'
+date:   '240801'
 output:
-  html_document:
-    df_print: paged
+  pdf_document: default
   html_notebook:
     code_folding: hide
+  html_document:
+    df_print: paged
+    keep_md: yes
 params:
-  ov.version: '0.0.8'
-  analysis_name: 'Eimeria'
-  search_type: "SEARCH"            # "LIST" or "STAT" or "SEARCH"
-  virome_search_term: '%Eimeria%'  # Scientific_name search term
-  virome_deplete_term: 'XXXXX' # Deplete this term from matches, or '' for none
-  input.path: inst/extdata/apicomplexa # <prefix>.stat OR <prefix>.list
-  control_type: 'BIOPROJECT'       # '' (N/A), 'SEARCH', 'LIST', or 'BIOPROJECT'
-  control_search_term: ''          # Set '' to exclude control search
+  ov.version: 0.0.8
+  analysis_name: Eimeria
+  search_type: SEARCH
+  virome_search_term: '%Eimeria%'
+  virome_deplete_term: XXXXX
+  input.path: inst/extdata/apicomplexa
+  control_type: BIOPROJECT
+  control_search_term: ''
   control.path: inst/extdata/yeast
-  export.cytoscape: FALSE
-  prod.run: no
+  export.cytoscape: true
+  prod.run: false
 editor_options:
-  markdown:
+  markdown: null
   wrap: 72
 ---
-# Open Virome Markdown  {.tabset}
 
-```{r}
+### Introduction
+
+
+```{r TODO,  include=FALSE, warning=FALSE}
 # Open Virome TODO:
 # - [ ] Report virus as the "rates of occurrence" within search queries
 # - [ ] Include metrics for Alpha and Beta-Diversity (conceptual development needed)
@@ -155,13 +162,14 @@ if (p$search_type == "LIST"){
   virome.df    <- get.palmVirome(org.search = p$virome_search_term)
   
   # Deplete terms (if available)
-  deplete.runs <- grep( p$virome_deplete_term, virome.df$scientific_name, ignore.case = T)
-  
-  if (length(deplete.runs > 0)){
+  if ( p$virome_deplete_term != '' ){
+    deplete.runs <- grep( p$virome_deplete_term, virome.df$scientific_name, ignore.case = T)
+    
+      if (length(deplete.runs > 0)){
     virome.df    <- virome.df[ -deplete.runs, ]
-  } else {
-    # No runs to deplete
-  }
+    
+      } # else no runs to deplete
+  } # else no depletion selected
   
   virome.runs  <- virome.df$run
   
@@ -374,12 +382,12 @@ plot.bp.hist <- ggplot(bp.df, aes( x = bp_n )) +
   xlab('(n runs)') + ylab('count') +
   theme(aspect.ratio = 0.6, legend.position = "none")
 
-plot.bp.hist2 <- ggplot(bp.df, aes(perc_target)) +
-  geom_histogram( bins = 30 , fill = hcl.colors(30, "Blues2", rev = T)) +
-  theme_bw() +
-  ggtitle("Virus-positive Runs (%) BioProjects") +
-  xlab('V+ (%)') + ylab('count') +
-  theme(aspect.ratio = 0.6, legend.position = "none")
+# plot.bp.hist2 <- ggplot(bp.df, aes(perc_target)) +
+#   geom_histogram( bins = 30 , fill = hcl.colors(30, "Blues2", rev = T)) +
+#   theme_bw() +
+#   ggtitle("Virus-positive Runs (%) BioProjects") +
+#   xlab('V+ (%)') + ylab('count') +
+#   theme(aspect.ratio = 0.6, legend.position = "none")
 ```
 
 ```{r,  fig.height = 8, fig.width = 10, retina = 3}
@@ -387,7 +395,7 @@ plot.bp.hist2 <- ggplot(bp.df, aes(perc_target)) +
 #plotly::hide_legend( bp.Size )
 plot.bp.Size
 plot.bp.hist
-plot.bp.hist2
+#plot.bp.hist2
 ```
 
 ### Virus Family Summary {#family-module}
@@ -581,6 +589,8 @@ if ( length( V(vir.g) ) < 2000 & length( E(vir.g) ) < 5000 ) {
   if (p$export.cytoscape == TRUE ){
     RCy3::createNetworkFromIgraph(vir.g, paste0("Virome - ", p$analysis_name,
                                                 ":",         p$report_id) )
+    RCy3::setVisualStyle("001 Open Virome - Vrank")
+    RCy3::layoutNetwork('kamada-kawai edgeAttribute=pid')
   }
 } else {
   print("Skipping network plot, >1000 Nodes or >5000 edges")

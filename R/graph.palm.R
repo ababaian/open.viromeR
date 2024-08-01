@@ -24,7 +24,7 @@ graph.palm     <- function(virome.df = NA,
                            all.edges      = FALSE,
                            con = SerratusConnect()) {
   
-  if ( !is.na( virome.df ) ){
+  if ( !is.na( virome.df )[1] ){
     # virome.df provided
     # Paint vertices/edges from virome.df
     sotu.df <- distinct( virome.df[ , c('sotu', 'nickname', 'gb_pid', 'gb_acc', 'tax_species', 'tax_family')])
