@@ -4,7 +4,6 @@ title: 'title'
 author: 'ababaian'
 date:   '240801'
 output:
-  pdf_document: default
   html_notebook:
     code_folding: hide
   html_document:
@@ -29,7 +28,6 @@ editor_options:
 
 ### Introduction
 
-
 ```{r TODO,  include=FALSE, warning=FALSE}
 # Open Virome TODO:
 # - [ ] Report virus as the "rates of occurrence" within search queries
@@ -38,7 +36,7 @@ editor_options:
 ```
 
 ### Analysis Overview {.tabset}
- 
+
 ```{r setup, include=FALSE}
 # RMarkdown Setting Initialization
 # Command Line Interface ----
@@ -299,7 +297,6 @@ plotly::hide_legend( plot.virome.org )
 
 ```
 
-
 ```{r, echo = FALSE}
 # Retrieve SRA Meta-data for virome data.frame
 sra.df <- get.sraMeta( virome.df2$run, con = con, ordinal = TRUE)
@@ -348,7 +345,6 @@ rm( sra.data, sra.data.nt)
 plot.sra.dataType
 plot.sra.dataType2
 ```
-
 
 ```{r, echo = FALSE}
 # BioProject Sizes
@@ -425,11 +421,9 @@ plot.virFam.n <- ggplot(virFam.df, aes( tax_family, n)) +
   ylab("Count") + facet_wrap(~set)
 ```
 
-
 ```{r,  fig.height = 4, fig.width = 8, retina = 3}
 plot.virFam.n
 ```
-
 
 ```{r, echo = FALSE}
 # Scatter plot of Virus Family in `n_runs` vs. `n_sotu`
@@ -455,7 +449,6 @@ plot.virFam.xy <- ggplot(virFam.df, aes( n_run, n_sotu, color = tax_family)) +
 # SRA Datasets Type
 plotly::hide_legend( plot.virFam.xy )
 ```
-
 
 ```{r, echo = FALSE}
 # Create a data.frame to plot a heatmap of Virus Family versus BioProject
@@ -519,7 +512,6 @@ virome2.org <- ggplot(vorgx.df2, aes( x = tax_family, n,
 virome2.org
 ```
 
-
 ```{r}
 # TODO
 ## Not working with >20 bioProjects
@@ -548,7 +540,6 @@ virome2.org
 #                                key.xlab = "Percent BioProject in Target",
 #                                margins = c(10,10), sepcolor=NULL)
 ```
-
 
 ```{r}
 # TODO
@@ -723,7 +714,6 @@ plot.comp3
 plot.comp4
 ```
 
-
 ```{r}
 # Create summary data
 i.sotu <- V(vir.g)$type
@@ -749,11 +739,9 @@ plot.vrank <- ggplot( vrank.df, aes(pr, vrich,
   ylab('V-enrichment (sOTU)') 
 ```
 
-
 ```{r}
 plot.vrank
 ```
-
 
 ```{r}
 # Create Palmprint - Palmprint alignment-distance network
@@ -766,7 +754,6 @@ palm.g <- graph.palm( virome.df , expanded.graph = TRUE)
   V(palm.g)$lpa.label   <- V(vir.g)$lpa.label[ vir2palm ]
   rm(vir2palm)
 ```
-
 
 ```{r}
 # Plot Network (add conditional to avoid plotting large networks)
@@ -783,7 +770,6 @@ if ( length( V(palm.g) ) < 2000 & length( E(palm.g) ) < 5000 ) {
 }
 
 ```
-
 
 ```{r}
 # Plot the Degree of interconnectivity for Palmprint network
@@ -865,6 +851,7 @@ rd.plot
 rm(ctrl.g, i, n.controlsets, observed.rank)
 rm(rd.plot)
 ```
+
 #### Per Virus-sOTU Summary - Expression and Frequency
 
 ```{r, echo = FALSE}
@@ -977,7 +964,7 @@ virus.hist.gbid
 
 #### Virome Data Tables
 
-- `full_virome.csv`
+-   `full_virome.csv`
 
 ```{r, echo = FALSE}
 ### Data-Table: `virome.csv`
@@ -1012,7 +999,7 @@ cbind( as.character(virome.df$scientific_name),
 
 ```
 
-- `summary_virome.csv`
+-   `summary_virome.csv`
 
 ```{r, echo = FALSE}
 ### Data-Table: `summary_virome.csv`
