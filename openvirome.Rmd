@@ -11,11 +11,12 @@ output:
     keep_md: yes
 params:
   ov.version: 0.0.8
-  analysis_name: Macaca           # Short analysis title
-  search_type: SEARCH                   # "LIST" or "STAT" or "SEARCH"
-  virome_search_term: '%Macaca%'       # Scientific_name search term
-  virome_deplete_term: ''               # Deplete this SEARCH term,  '' for none
-  input.path: inst/extdata/apicomplexa  # <prefix> for .stat or .list file
+  analysis_name: Eimeria               # Short analysis title
+  search_type: GENUS                    # "LIST" or "STAT" or "SEARCH" or "GENUS"
+  virome_search_term: '%%'              # --"SEARCH" : Scientific_name term
+  virome_deplete_term: ''               #              Deplete from SEARCH term, '' for none
+  genus_match_term: 'Eimeria'           # -- "GENUS" : NCBI Taxonomy name to exact-match
+  input.path: inst/extdata/apicomplexa  # -- "LIST/STAT" : <prefix> for .stat or .list file
   control_type: BIOPROJECT              # '' (N/A), 'SEARCH', 'LIST', 'BIOPROJECT', 'RANDOM'
   control_search_term: ''               # '' for none
   control.path: inst/extdata/yeast      # <prefix> for .stat or .list file
@@ -175,9 +176,8 @@ if (p$search_type == "SEARCH"){
 
 # GENUS SEARCH ~~~~~~~~~~
 } else if (p$search_type == "GENUS"){
-  # Retrieve virome using search term
-  virome.runs <- get.taxRunlist( genus = p$virome_search_term )
-  
+  # Retrieve virome by SRA Run Info "genus"
+  virome.runs  <- get.taxRunlist( genus = p$genus_match_term )
   virome.df    <- get.palmVirome(run.vec = virome.runs)
   virome.runs  <- virome.df$run
   
