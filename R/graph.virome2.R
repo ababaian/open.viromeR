@@ -284,8 +284,17 @@ graph.virome2  <- function(virome.df  = NA,
                               label  = factor( vertex_attr( g, labelname ) ),
                               int.label  = -1 ,
                               fixed  = !V(g)$type )
-  
-        lab.df$int.label[ lab.df$fixed ] <- as.numeric( lab.df$label[ lab.df$fixed ] )
+        
+
+        if (levels( lab.df$label )[1] == "NA" & length( levels( lab.df$label) ) == 2 ){
+          # Edge Case: Convert labels to integers
+          # NA is assigned integer value of 1, and other label is assigned 2
+          # does not work with LPA, switch it
+          lab.df$int.label[ lab.df$fixed ] <- 1
+        } else {
+          # Use Factor-numeric as integer labels
+          lab.df$int.label[ lab.df$fixed ] <- as.numeric( lab.df$label[ lab.df$fixed ] )
+        }
         
         lpa <- cluster_label_prop(g,
                                   weights = E(g)$vrank,

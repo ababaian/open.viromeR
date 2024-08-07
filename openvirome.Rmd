@@ -11,9 +11,9 @@ output:
     keep_md: yes
 params:
   ov.version: 0.0.8
-  analysis_name: Eimeria                # Short analysis title
+  analysis_name: Macaca           # Short analysis title
   search_type: SEARCH                   # "LIST" or "STAT" or "SEARCH"
-  virome_search_term: '%Eimeria%'       # Scientific_name search term
+  virome_search_term: '%Macaca%'       # Scientific_name search term
   virome_deplete_term: ''               # Deplete this SEARCH term,  '' for none
   input.path: inst/extdata/apicomplexa  # <prefix> for .stat or .list file
   control_type: BIOPROJECT              # '' (N/A), 'SEARCH', 'LIST', 'BIOPROJECT', 'RANDOM'
@@ -488,6 +488,7 @@ rm( bpTop, bpTop.n, bp.df, bp.total.n)
 
 ```{r, echo = FALSE, fig.height = 6, fig.width = 10, retina = 3}
 # Virome Family count bar plot
+if (length(virFam.df[1,]) > 1 ){
 plot.virFam.heat <- gplots::heatmap.2(virFam.df, trace = "none", 
                                breaks = c(0,1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
                                density.info="none",
@@ -496,6 +497,7 @@ plot.virFam.heat <- gplots::heatmap.2(virFam.df, trace = "none",
                                key.xlab = "Percent BioProject Virus+",
                                margins = c(10,10), sepcolor=NULL)
 rm(virFam.df)
+}
 ```
 
 ```{r, echo = FALSE}
@@ -590,7 +592,7 @@ if ( length( V(vir.g) ) < 2000 & length( E(vir.g) ) < 5000 ) {
     RCy3::createNetworkFromIgraph(vir.g, paste0("Virome - ", p$analysis_name,
                                                 ":",         p$report_id) )
     RCy3::setVisualStyle("ov001 virome")
-    RCy3::layoutNetwork('kamada-kawai edgeAttribute=pid')
+    #RCy3::layoutNetwork('kamada-kawai edgeAttribute=pid')
   }
 } else {
   print("Skipping network plot, >1000 Nodes or >5000 edges")
