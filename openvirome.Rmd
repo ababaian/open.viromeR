@@ -173,6 +173,14 @@ if (p$search_type == "SEARCH"){
   
   virome.runs  <- virome.df$run
 
+# GENUS SEARCH ~~~~~~~~~~
+} else if (p$search_type == "GENUS"){
+  # Retrieve virome using search term
+  virome.runs <- get.taxRunlist( genus = p$virome_search_term )
+  
+  virome.df    <- get.palmVirome(run.vec = virome.runs)
+  virome.runs  <- virome.df$run
+  
 # LIST SEARCH ~~~~~~~~~~~~~~~
 } else if (p$search_type == "LIST"){
   # Retrieve Virome using a SRA Run vector
