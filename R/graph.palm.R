@@ -2,80 +2,102 @@
 #'
 #' Convert virome.df into a palmprint-palmprint igraph object
 #'
-#' @param virome.df   data.frame, produced by the get.virome() function
-#' @param sotu.vec    character, vector of sOTU id to retrieve
-#' @param pid.threshold numeric, min percent identity to include an edge [40]
+#' @param sotu.vec       character, vector of sOTU id to retrieve
+#' @param pid.threshold  numeric, min percent identity to include an edge [30]
+#' @param expanded.graph logical, return non-input sOTU joined to >=2 input sOTU
+#' @param all.edges      logical, return all sOTU with alignment to input sOTU
+#' @param get.metadata   logical, return sOTU meta-data for all returned entries
 #' @param con        pq-connection, use SerratusConnect()
 #' @return graph.virome, an igraph object
 #' @keywords palmid sql sra biosample bioproject Serratus igraph
 #' @examples
 #'
 #' \donttest{
-#' graph.virome(virome.df, nodes = "run", edges = "sotu", node.col = "bio_project")
+#' graph.palm(virome.df$sotu)
 #' }
 #'
 #' @import dplyr igraph
 #' @export
 #'
-graph.palm     <- function(virome.df = NA,
-                           sotu.vec  = NA,
-                           pid.threshold = 30,
+graph.palm     <- function(sotu.vec       = NA,
+                           pid.threshold  = 30,
                            expanded.graph = FALSE,
                            all.edges      = FALSE,
+                           get.metadata   = TRUE,
                            con = SerratusConnect()) {
   
-  if ( !is.na( virome.df )[1] ){
-    # virome.df provided
-    # Paint vertices/edges from virome.df
-    sotu.df <- distinct( virome.df[ , c('sotu', 'nickname', 'gb_pid', 'gb_acc', 'tax_species', 'tax_family')])
-    # Reduce sOTU list to unique entries
-    sotu.vec <- as.character( sotu.df$sotu )
-  } else if ( !is.na( sotu.vec ) ) {
-    sotu.vec <- as.character( sotu.vec )
-    sotu.df  <- data.frame( sotu = sotu.vec,
-                            nickname = NA,
-                            gb_pid   = NA,
-                            gb_acc   = NA,
-                            tax_species = NA,
-                            tax_family  = NA)
+  # SOTU.VEC INPUT --------------------
+  if ( !is.na( sotu.vec )[1] ) {
+    sotu.vec <- unique( as.character( sotu.vec ) )
   } else {
-    stop("virome.df or sotu.vec must be provided as input.")
+    stop("sotu.vec must be provided as input.")
   }
-    
+  
   # Get palmVirome based on sra.vec
   # add self-identity (100%)
   sotu.edge <- tbl(con, "palm_graph") %>%
     dplyr::filter( palm_id1 %in% sotu.vec ) %>%
     as.data.frame()
-    dbDisconnect( con ) # Close Connection
   
-  if (expanded.graph){
-    # Return all linked sOTU
-    sotu.edge <- sotu.edge[ sotu.edge$pident >= pid.threshold, ]
-    
-    # Create igraph object from Edge List
-    g <- graph_from_data_frame(sotu.edge[, c("palm_id1", "palm_id2")],
-                               directed = FALSE)
-    E(g)$pid <- sotu.edge$pident
-    
-    if (!all.edges){
-      # Prune edges to those with Degree >= 2
-      # (removes single-link viruses)
-      g <- subgraph( g, vids = which(degree(g) >= 2) )
-    }
-    
-  } else {
+  # EXPANDED PALMNET ------------------
+  if (!expanded.graph){
     # Return sOTU in input set only
     sotu.edge <- sotu.edge[ sotu.edge$palm_id2 %in% sotu.vec,  ]
-    sotu.edge <- sotu.edge[ sotu.edge$pident >= pid.threshold, ]
+  }
+
+  # MERGE PAIRWISE ALIGNMENTS -----------
+  mergePairwiseAlignment <- function(sotu.edge_ = sotu.edge){
+    # For each sOTU_X and sOTU_Y, both X_Y and Y_X alignments
+    # are reported, average those pid and report single
+    # alignment
+    sotu.edge_ = sotu.edge
+    id1LT <- (sotu.edge$palm_id1 < sotu.edge$palm_id2)
     
-    # Create igraph object from Edge List
-    g <- graph_from_data_frame(sotu.edge[, c("palm_id1", "palm_id2")],
-                               directed = FALSE,
-                               vertices = sotu.df)
-    E(g)$pid <- sotu.edge$pident
+    sotu.edge2 <- sotu.edge_
+    sotu.edge2$id1LT <- id1LT
+    
+    # Transpose palm_id1 and palm_id2 when 1 < 2
+    sotu.edge2$palm_id1[ id1LT ]  <- sotu.edge_$palm_id2[ id1LT ]
+    sotu.edge2$palm_id2[ id1LT ]  <- sotu.edge_$palm_id1[ id1LT ]
+    
+    sotu.edge2 <- aggregate(pident ~ palm_id1 + palm_id2, sotu.edge2, mean)
+    
+    return( sotu.edge2 )
+  }
+  sotu.edge <- mergePairwiseAlignment()
+  
+  # PID FILTER EDGES ---------------------
+  sotu.edge <- sotu.edge[ sotu.edge$pident >= pid.threshold, ]
+  
+  # GET METADATA ------------------------
+  sotu.nodes  <- unique( c( sotu.edge$palm_id1, sotu.edge$palm_id2 ))
+  
+  if (get.metadata){
+    # Retrieve Meta-data
+    sotu.df <- tbl(con, "palm_tax") %>%
+      dplyr::filter( sotu %in% sotu.nodes ) %>%
+      dplyr::filter( centroid == TRUE ) %>%
+      select(sotu, nickname, percent_identity, gb_acc, tax_species, tax_family) %>%  
+      as.data.frame()
+      colnames(sotu.df) <- c("sotu", "nickname", "gb_pid", "gb_acc", "tax_species", "tax_family")
+  } else {
+    # NA for meta-data
+    sotu.df <- data.frame( sotu = sotu.nodes,
+                            nickname = NA,
+                            gb_pid   = NA,
+                            gb_acc   = NA,
+                            tax_species = NA,
+                            tax_family  = NA)
   }
   
+  
+  # Create igraph object from Edge List
+  g <- graph_from_data_frame(sotu.edge[, c("palm_id1", "palm_id2")],
+                             directed = FALSE,
+                             vertices = sotu.df)
+  E(g)$pid <- sotu.edge$pident
+  
+  # Graph Stats =========================================
   # Calculate Components (communities) of the graph
   comp.g <- components(g)
   Vc.label <- factor( comp.g$membership ) #original labels
@@ -88,5 +110,6 @@ graph.palm     <- function(virome.df = NA,
   # Assign labels to vertices
   V(g)$component <- as.character( Vc.label )
   
+  dbDisconnect( con ) # Close Connection
   return(g)
 }

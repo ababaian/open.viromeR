@@ -29,6 +29,7 @@ get.taxRunlist <- function(genus = NULL, con = SerratusConnect() ) {
     # must be unique
     tax.runs <- tax.runs[ !duplicated(tax.runs$run), ]
     
+    DBI::dbDisconnect(con)
     return( tax.runs )
     
 }

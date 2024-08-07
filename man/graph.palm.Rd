@@ -5,20 +5,24 @@
 \title{Convert virome.df into a palmprint-palmprint igraph object}
 \usage{
 graph.palm(
-  virome.df = NA,
   sotu.vec = NA,
   pid.threshold = 30,
   expanded.graph = FALSE,
   all.edges = FALSE,
+  get.metadata = TRUE,
   con = SerratusConnect()
 )
 }
 \arguments{
-\item{virome.df}{data.frame, produced by the get.virome() function}
-
 \item{sotu.vec}{character, vector of sOTU id to retrieve}
 
-\item{pid.threshold}{numeric, min percent identity to include an edge [40]}
+\item{pid.threshold}{numeric, min percent identity to include an edge [30]}
+
+\item{expanded.graph}{logical, return non-input sOTU joined to >=2 input sOTU}
+
+\item{all.edges}{logical, return all sOTU with alignment to input sOTU}
+
+\item{get.metadata}{logical, return sOTU meta-data for all returned entries}
 
 \item{con}{pq-connection, use SerratusConnect()}
 }
@@ -31,7 +35,7 @@ Convert virome.df into a palmprint-palmprint igraph object
 \examples{
 
 \donttest{
-graph.virome(virome.df, nodes = "run", edges = "sotu", node.col = "bio_project")
+graph.palm(virome.df$sotu)
 }
 
 }

@@ -764,13 +764,12 @@ plot.vrank
 ```
 
 ```{r}
-# Create Palmprint - Palmprint alignment-distance network
-palm.g <- graph.palm( virome.df , expanded.graph = TRUE)
+# Create Palmprint - Palmprint nalignment-distance network
+palm.g <- graph.palm( virome.df$sotu , expanded.graph = FALSE)
   vir2palm <- match(V(palm.g)$name, V(vir.g)$name) # look-up index
   V(palm.g)$pr    <- V(vir.g)$pr[ vir2palm ]
   V(palm.g)$vrich <- V(vir.g)$vrich[ vir2palm ]
   V(palm.g)$vrank <- V(vir.g)$vrank[ vir2palm ]
-  V(palm.g)$tax_species <- V(vir.g)$tax_species[ vir2palm ]
   V(palm.g)$lpa.label   <- V(vir.g)$lpa.label[ vir2palm ]
   rm(vir2palm)
 ```
