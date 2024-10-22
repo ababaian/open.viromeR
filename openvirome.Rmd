@@ -1,43 +1,66 @@
 ---
 title: 'Open Virome: Earths viruses in your palm'
-#title: 'title'
 author: 'ababaian'
-date:   '240801'
-output:
+date:   '241022'
+output: # HTML export controls
   html_notebook:
     code_folding: hide
   html_document:
     df_print: paged
     keep_md: yes
-params:
-  ov.version: 0.0.8
-  analysis_name: Eimeria               # Short analysis title
-  search_type: GENUS                    # "LIST" or "STAT" or "SEARCH" or "GENUS"
-  virome_search_term: '%%'              # --"SEARCH" : Scientific_name term
-  virome_deplete_term: ''               #              Deplete from SEARCH term, '' for none
-  genus_match_term: 'Eimeria'           # -- "GENUS" : NCBI Taxonomy name to exact-match
-  input.path: inst/extdata/apicomplexa  # -- "LIST/STAT" : <prefix> for .stat or .list file
-  control_type: BIOPROJECT              # '' (N/A), 'SEARCH', 'LIST', 'BIOPROJECT', 'RANDOM'
-  control_search_term: ''               # '' for none
-  control.path: inst/extdata/yeast      # <prefix> for .stat or .list file
-  output.path:  ./                      # <prefix> for output Data files
-  export.cytoscape: true
-  prod.run: false
+params:  # OV-Analysis Parameters ==============================================
+  ov.version: 0.0.9
+  analysis_name: Eimeria # Short title for analysis
+  # ----------------------------------------------------------------------------
+  # Virome-Query generation method
+  search_type: GENUS # "Genus", "SEARCH", "LIST" or "STAT"                   
+  #
+  # "GENUS" : Generate Virome by selecting a set of SRA Runs by their taxonomic
+  #           Genus (NCBI Taxonomy). Exact match only, includes child-taxa.
+  #
+  genus_match_term: 'Eimeria'
+  #
+  # "SEARCH": Generate Virome by an SQL search of the SRA Run metadata for the 
+  #           'scientific_name' field. Can include partial-match with '%'.
+  #           Exclude matches with the deplete_term
+  #
+  virome_search_term: 'Eimeria%'
+  virome_deplete_term: '%falciformis' # '' for none
+  #
+  # "LIST"  : Generate a Virome by selecting a set of SRA Run Accessions as they 
+  #           listed an input file
+  #
+  # "STAT"  : Generate a Virome by selecting SRA Run as output by the "SRA-STAT"
+  #           tool (see example files)
+  #
+  input.path: inst/extdata/eimeria.list
+  #
+  # ----------------------------------------------------------------------------
+  # Control-Query generation method (as above)
+  # used for creating a "background" set of runs to measure Virome Enrichment
+  control_type: BIOPROJECT # '' (none), 'SEARCH', 'LIST', 'BIOPROJECT', 'RANDOM'
+  #
+  # 'BIOPROJECT' : Control set are virus-negative Runs in the Virome Query
+  #
+  control_search_term: ''
+  control.path: inst/extdata/yeast.list
+  # ----------------------------------------------------------------------------
+  output.path:  ./        # <prefix-directory> for output Data files
+  export.cytoscape: true  # Export to Cytoscape (must open openvirome.cys)
+  run.production: false
 editor_options:
   markdown: null
   wrap: 72
 ---
 
-### Introduction
-
 ```{r TODO,  include=FALSE, warning=FALSE}
-# Open Virome TODO:
+# Open Virome Dev TODO:
 # - [ ] Report virus as the "rates of occurrence" within search queries
 # - [ ] Include metrics for Alpha and Beta-Diversity (conceptual development needed)
 # - [ ] Report RdRp-network and explore network enrichment for this
 ```
 
-### Analysis Overview {.tabset}
+### Analysis Summary {.tabset}
 
 ```{r setup, include=FALSE}
 # RMarkdown Setting Initialization
@@ -54,27 +77,24 @@ div.main-container {
 div.col-md-12 .pull-right {
   float: left !important
 }
-
-
 ```
 
 ```{r production, include=FALSE, warning=FALSE}
-# Run as Production Pipeline or Development
-production.version = params$prod.run
-
-if (production.version) {
-  # Load stable palmid package
+# Load or Build open.virome.R library
+if (params$run.production) {
+  # Load stable Open Virome package
   library('open.viromeR', quietly = T)
 
   # Disable warnings
    defaultW <- getOption("warn")
    options(warn = -1)
 } else {
+  # Compile Open Virome from local source
   # Warnings variable
   defaultW <- getOption("warn")
   options(warn = -1)
 
-  # Compile a new palmid from source
+  # roxygen2 compile
   roxygen2::roxygenise()
 }
 
@@ -83,8 +103,8 @@ rm( defaultW, production.version )
 ```
 
 ```{r initaialize, include = FALSE}
-# INITIALIZE OPEN VIROME WORKSPACE -------------------
-p <- params
+# INITIALIZE OPEN VIROME WORKSPACE ---------------------------------------------
+p <- params # parameter data.table
 
 # Establish Serratus server connection
 con <- SerratusConnect()
@@ -97,13 +117,13 @@ if (is.null(p$input.path)) {
   stop("Error: No input.path provided. See YAML header of openvirome.Rmd")
 }
 
-# Populate Parameters for Open Virome
-  p$input.list      <- paste0(p$input.path, '.list')    # Virome search list file
-  p$control.list    <- paste0(p$control.path, '.list')  # Control search list file
-  p$input.virome    <- paste0(p$input.path, '.virome')  # preamde palm_virome query csv
-  p$input.stat      <- paste0(p$input.path, '.stat' )   # STAT-based query
+# Input Files  Parameters for Open Virome
+  p$input.list      <- paste0(p$input.path)    # Virome search list file
+  p$control.list    <- paste0(p$control.path)  # Control search list file
+  p$input.virome    <- paste0(p$input.path)    # premade palm_virome query csv
+  p$input.stat      <- paste0(p$input.path)    # STAT-based query
 
-# Output HTML Report
+# Output HTML Report and Data Files
 p$report_id      <- format(Sys.time(),  "%Y%m%d_%H%M%S")
 p$output.html   <- paste0(p$output.path, p$analysis_name, '_', p$report_id, '.html')
 p$output.rdata  <- paste0(p$output.path, p$analysis_name, '_', p$report_id, '.RData')
@@ -115,19 +135,19 @@ p$output.rdata  <- paste0(p$output.path, p$analysis_name, '_', p$report_id, '.RD
 
 # Exclude control logical variable
 if (p$control_type == ''){
-  # No Control Run set calculated
+  # Do not calculate a control query
   p$doControl <- FALSE
 } else {
   p$doControl <- TRUE
 }
 
-# LOOK AND FEEL -----------------------
-
+# LOOK AND FEEL ----------------------------------------------------------------
 # Control / Test set colors
 p$ui.setcol <- c('gray50', 'cornflowerblue')
 ```
 
 ```{r initialize message, echo = FALSE}
+# Generate Text summary of Open Virome Analysis
 parameter_summary <- function(p){
   # Print Parameter Settings
   cat( paste0("Open Virome Version: ", p$ov.version), "\n")
@@ -155,7 +175,7 @@ parameter_summary(p)
 ```
 
 ```{r virome import, include = FALSE, echo = FALSE}
-# Import Virome -------------------------------------------
+# Generate Virome Query and Virome Object --------------------------------------
 
 # SQL QUERY SEARCH ~~~~~~~~~~
 if (p$search_type == "SEARCH"){
@@ -208,7 +228,7 @@ virx.df   <- melt.virome( virome.df )
 ```
 
 ```{r control virome, include = FALSE, echo = FALSE}
-# Import Control Virome -----------------------------------
+# Import Control Virome --------------------------------------------------------
 if (p$control_type == "LIST"){
   # Retrieve Virome using a SRA Run vector
   negVirome.df <- get.negativeVirome(run.vec = virome.runs )
@@ -606,6 +626,7 @@ if ( length( V(vir.g) ) < 2000 & length( E(vir.g) ) < 5000 ) {
   print("Skipping network plot, >1000 Nodes or >5000 edges")
 }
 ```
+
 #### Virome Graph Components
 
 ```{r component analysis, include = FALSE}
