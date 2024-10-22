@@ -1,3 +1,7 @@
+## `open.viromeR` 
+
+![Logo](inst/extdata/img/ov192.png) 
+
 `open.viromeR` is an `R` interface for the Open Virome platform.
 
 ![Open Virome Overview](inst/extdata/img/openvirome.png)
