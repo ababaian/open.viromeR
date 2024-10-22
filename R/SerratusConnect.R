@@ -10,10 +10,11 @@
 #'
 #' @import dplyr ggplot2
 #' @export
-SerratusConnect <- function(){
-
+SerratusConnect <- function(quiet = FALSE){
+  if (!quiet){ warning("New SQL Connection Opened") }
+  
   con <- DBI::dbConnect(
-    drv = "PostgreSQL",
+    drv = PostgreSQL(max.con = 10000),
     user="public_reader",
     password="serratus",
     host="serratus-aurora-20210406.cluster-ro-ccz9y6yshbls.us-east-1.rds.amazonaws.com",
