@@ -4,7 +4,7 @@
 \alias{SerratusConnect}
 \title{SerratusConnect}
 \usage{
-SerratusConnect()
+SerratusConnect(quiet = FALSE)
 }
 \value{
 con PostgreSQLConnection

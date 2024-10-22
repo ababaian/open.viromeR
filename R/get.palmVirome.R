@@ -26,6 +26,7 @@ get.palmVirome <- function(run.vec    = NA,
   
   if ( !is.na(run.vec)[1] ){
   if (class(run.vec) != 'character'){
+    DBI::dbDisconnect(con)
     stop("run.vec must be a character input")
   }
   
@@ -33,19 +34,25 @@ get.palmVirome <- function(run.vec    = NA,
   virome.df <- tbl(con, "palm_virome") %>%
     dplyr::filter( run %in% run.vec ) %>%
     as.data.frame()
+  
   } else if ( !is.na(org.search)[1] ) {
   # Get palmVirome based on SQL "like" search of org.search
   # agains the "scientific_name" column
   virome.df <- tbl(con, "palm_virome") %>%
     dplyr::filter( scientific_name %like% org.search ) %>%
     as.data.frame()
+    DBI::dbDisconnect(con)
+  
   } else {
+    DBI::dbDisconnect(con)
     stop(paste0("One of 'sra.vec' or 'org.search' must be provided"))
   }
   
   # Check that return is non-empty
   if ( nrow(virome.df) == 0 ){
+    DBI::dbDisconnect(con)
     stop(paste0("Error: no runs were returned."))
+    
     } else {
     # Set each column class explicitly
     virome.df$run             <- factor(virome.df$run)
@@ -77,10 +84,15 @@ get.palmVirome <- function(run.vec    = NA,
   # Remove False Positive "hits"
   if (rm.fp){
     known.fp.fam <- c('Ceratobasidiaceae')
-    known.fp.sotu <- c('u41440', 'u33702', 'u37827', 'u39590')
+    known.fp.sotu <- c('u30654', 'u41440', 'u33702', 'u37827', 'u39590')
     virome.df <- virome.df[ !(virome.df$tax_family %in% known.fp.fam), ]
     virome.df <- virome.df[ !(virome.df$sotu %in% known.fp.sotu), ]
     
+    # POST QC check for empty
+    if ( nrow(virome.df) == 0 ){
+      DBI::dbDisconnect(con)
+      stop(paste0("Error: no runs were returned."))
+    }
   }
   
   # Add time (release date) to virome.df
@@ -97,7 +109,6 @@ get.palmVirome <- function(run.vec    = NA,
   #   virome.df$lng <- virome.geo.tmp$lng
   #   virome.df$lat <- virome.geo.tmp$lat
   # }
-  
   DBI::dbDisconnect(con)
   return(virome.df)
 }
