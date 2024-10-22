@@ -1,5 +1,5 @@
 ---
-title: 'Open Virome: Earths viruses in your palm'
+title: 'Open Virome: Earths viruses in your Palm'
 author: 'ababaian'
 date:   '241022'
 output: # HTML export controls
@@ -60,7 +60,7 @@ editor_options:
 # - [ ] Report RdRp-network and explore network enrichment for this
 ```
 
-### Analysis Summary {.tabset}
+### Parameter Summary {.tabset}
 
 ```{r setup, include=FALSE}
 # RMarkdown Setting Initialization
@@ -306,10 +306,10 @@ virx.df  %>%
 
 ```
 
-### Virome Run Summary {#run-module}
+### Virome Query (Run Statistics) {#run-module}
 
 ```{r, echo = FALSE}
-# Create virome organism summary data.frame
+# Create virome organism metadata summary data.frame
 vorgx.df <- virome.df2 %>%
   dplyr::count(scientific_name, tax_family, node_qc, sort = TRUE)
     vorgx.df$node_qc[ is.na(vorgx.df$node_qc) ] <- FALSE
@@ -327,8 +327,8 @@ plot.virome.org <- ggplot(vorgx.df, aes( scientific_name, n,
                                     fill = vRNA)) +
   geom_bar( stat = 'identity') +
   coord_flip() +  theme_bw() +
-  xlab("Scientific Name (metadata)") +
-  ylab("Count SRA Runs") + facet_wrap(~vRNA) +
+  xlab("Scientific Name") +
+  ylab("SRA Runs (count)") + facet_wrap(~vRNA) +
   scale_fill_manual( values = p$ui.setcol)
 
 ```
